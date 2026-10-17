@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -237,7 +238,8 @@ export default function Settings({
         <div className="flex items-center justify-between px-4 py-3.5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-ink text-sm">Patcher Data</span>
-            <span className="text-ink-muted text-xs">Temporary overlay files, rebuilt on apply</span>
+            <span className="text-ink-muted text-xs">已处理的皮肤与补丁缓存；清理后下次应用需要重新准备</span>
+            <button onClick={()=>void invoke("open_apply_log").catch(()=>{})} className="text-gold-400 mt-1 cursor-pointer text-left text-xs">打开应用耗时日志</button>
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <span className="text-ink-secondary min-w-16 text-right text-sm tabular-nums">

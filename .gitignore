@@ -20,5 +20,8 @@ mod-tools/build*/
 mod-tools/target/
 
 *.sh
+.local-build/
+src-tauri/icons/android/
+src-tauri/icons/ios/
 .claude
 *.todo

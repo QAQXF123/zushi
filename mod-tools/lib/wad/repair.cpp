@@ -10,6 +10,9 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <xxh3.h>
+#include <fstream>
+#include <unistd.h>
 
 using namespace lol;
 using namespace lol::wad;
@@ -414,6 +417,52 @@ namespace {
         }
     };
 
+    auto cached_layout(Archive const& stock, fs::path const& cache_dir) -> Layout {
+        XXH3_state_s state{}; XXH3_64bits_reset(&state);
+        for (auto const& [name,data] : stock.entries) {
+            auto path=(std::uint64_t)name;auto checksum=data.checksum();
+            XXH3_64bits_update(&state,&path,sizeof(path));XXH3_64bits_update(&state,&checksum,sizeof(checksum));
+        }
+        auto const fingerprint=XXH3_64bits_digest(&state);
+        auto const path=cache_dir/fmt::format("{:016x}.layout",fingerprint);
+        if (!cache_dir.empty() && fs::exists(path)) {
+            try {
+                auto bytes=io::Bytes::from_file(path);
+                if(bytes.size()<32||bytes.size()>8*io::MiB)throw ParseError("bad layout cache size");
+                std::uint64_t checksum{};std::memcpy(&checksum,bytes.data()+bytes.size()-8,8);
+                if(checksum!=XXH3_64bits(bytes.data(),bytes.size()-8))throw ParseError("bad layout cache checksum");
+                auto reader=Reader{bytes.data(),bytes.data()+bytes.size()-8};
+                if(reader.bytes(8)!="ZSLAY001"||reader.num<std::uint64_t>()!=fingerprint)throw ParseError("bad layout cache version");
+                auto layout=Layout{};
+                auto count=reader.num<std::uint32_t>();if(count>100000)throw ParseError("bad layout count");
+                for(std::uint32_t i=0;i<count;++i){auto key=reader.num<std::uint64_t>();auto value=reader.num<std::uint8_t>();if(!value||value>3)throw ParseError("bad storage");layout.storage_by_owner[key]=value;}
+                count=reader.num<std::uint32_t>();if(count>100000)throw ParseError("bad layout count");
+                for(std::uint32_t i=0;i<count;++i){auto key=reader.num<std::uint32_t>();auto value=reader.num<std::uint8_t>();if(!value||value>3)throw ParseError("bad storage");layout.storage_by_name[key]=value;}
+                count=reader.num<std::uint32_t>();if(count>100000)throw ParseError("bad layout count");
+                for(std::uint32_t i=0;i<count;++i){auto key=reader.num<std::uint32_t>();auto value=reader.num<std::uint32_t>();layout.self_id_field[key]=value;}
+                if(reader.cur!=reader.end)throw ParseError("layout cache trailing data");
+                logi("RepairLayout: {:016x} cache=hit",fingerprint);
+                return layout;
+            }catch(std::exception const&){error::stack().clear();}
+        }
+        auto layout=Layout::learn(stock);
+        logi("RepairLayout: {:016x} cache=miss",fingerprint);
+        if(!cache_dir.empty()){
+            try{
+                auto writer=Writer{};writer.out="ZSLAY001";writer.num(fingerprint);
+                writer.num<std::uint32_t>(layout.storage_by_owner.size());for(auto [key,value]:layout.storage_by_owner){writer.num(key);writer.num(value);}
+                writer.num<std::uint32_t>(layout.storage_by_name.size());for(auto [key,value]:layout.storage_by_name){writer.num(key);writer.num(value);}
+                writer.num<std::uint32_t>(layout.self_id_field.size());for(auto [key,value]:layout.self_id_field){writer.num(key);writer.num(value);}
+                writer.num<std::uint64_t>(XXH3_64bits(writer.out.data(),writer.out.size()));
+                fs::create_directories(cache_dir);
+                auto temp=fs::path(path.generic_string()+fmt::format(".{}.pending",getpid()));
+                {std::ofstream out(temp,std::ios::binary);out.write(writer.out.data(),writer.out.size());out.flush();if(!out)throw ParseError("layout cache write failed");}
+                fs::rename(temp,path);
+            }catch(std::exception const&){error::stack().clear();logw("Could not persist repair layout cache");}
+        }
+        return layout;
+    }
+
     // Shared .bin files were renamed from DATA/<Champ>_Skins_... to
     // DATA/Characters/<Champ>/<Champ>_Multi_Skins_...
     auto renamed_shared_bin(std::string const& path) -> std::optional<std::string> {
@@ -460,12 +509,13 @@ namespace {
     }
 }
 
-auto wad::repair_outdated_bins(Index& mod, Index const& game) -> std::size_t {
+auto wad::repair_outdated_bins(Index& mod, Index const& game, std::unordered_set<std::uint64_t> const* game_paths, fs::path const& cache_dir) -> std::size_t {
     lol_trace_func(lol_trace_var("{}", mod.name));
     auto layouts = std::unordered_map<std::string, Layout>{};
     auto known_paths = std::unordered_set<std::uint64_t>{};
-    auto exists = [&known_paths](std::string const& path) {
-        return known_paths.contains(hash::Xxh64(path));
+    auto exists = [&known_paths,game_paths](std::string const& path) {
+        auto const hash=hash::Xxh64(path);
+        return known_paths.contains(hash) || (game_paths && game_paths->contains(hash));
     };
     auto repaired = std::size_t{};
 
@@ -491,6 +541,7 @@ auto wad::repair_outdated_bins(Index& mod, Index const& game) -> std::size_t {
 
             if (known_paths.empty()) {
                 for (auto const* index : {&game, (Index const*)&mod}) {
+                    if (index == &game && game_paths) continue;
                     for (auto const& [other_name, other] : index->mounts) {
                         for (auto const& [path, entry] : other.archive.entries) known_paths.insert(path);
                     }
@@ -498,7 +549,7 @@ auto wad::repair_outdated_bins(Index& mod, Index const& game) -> std::size_t {
             }
             auto layout = layouts.find(base->name());
             if (layout == layouts.end()) {
-                layout = layouts.emplace(base->name(), Layout::learn(base->archive)).first;
+                layout = layouts.emplace(base->name(), cached_layout(base->archive,cache_dir)).first;
             }
 
             if (repair(file, layout->second, exists)) {

@@ -15,6 +15,9 @@ pub enum PatcherStatus {
     #[default]
     Idle,
     Importing,
+    ImportingSkins { current: usize, total: usize, cached: usize },
+    CheckingCache,
+    ReusingOverlay,
     BuildingOverlay,
     WaitingForGame,
     FoundGame,

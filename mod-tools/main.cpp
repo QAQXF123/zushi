@@ -15,6 +15,7 @@
 #include <thread>
 #include <unistd.h>
 #include <unordered_set>
+#include <fstream>
 
 using namespace lol;
 
@@ -39,7 +40,7 @@ static auto is_wad(fs::path const& path) -> bool {
     return false;
 }
 
-static auto mod_addwad(fs::path src, fs::path dst, fs::path game, bool noTFT, bool removeUNK) -> void {
+static auto mod_addwad(fs::path src, fs::path dst, fs::path game, bool noTFT, bool removeUNK, wad::Index const* shared_game = nullptr) -> void {
     lol_trace_func(lol_trace_var("{}", src), lol_trace_var("{}", dst), lol_trace_var("{}", game));
     lol_throw_if(src.empty());
     lol_throw_if(dst.empty());
@@ -54,9 +55,13 @@ static auto mod_addwad(fs::path src, fs::path dst, fs::path game, bool noTFT, bo
 
     if (!game.empty()) {
         logi("Indexing game wads");
-        auto game_index = wad::Index::from_game_folder(game);
+        auto owned_game = wad::Index{};
+        if (!shared_game) {
+            owned_game = wad::Index::from_game_folder(game);
+            owned_game.remove_filter(noTFT ? FILTER_TFT : FILTER_NONE);
+        }
+        auto const& game_index = shared_game ? *shared_game : owned_game;
         lol_throw_if_msg(game_index.mounts.empty(), "Not a valid Game folder");
-        game_index.remove_filter(noTFT ? FILTER_TFT : FILTER_NONE);
 
         logi("Rebasing");
         auto base = game_index.find_by_mount_name_or_overlap(mounted.name(), mounted.archive);
@@ -81,7 +86,7 @@ static auto mod_addwad(fs::path src, fs::path dst, fs::path game, bool noTFT, bo
     mounted.archive.write_to_file(dst / "WAD" / mounted.relpath);
 }
 
-static auto mod_copy(fs::path src, fs::path dst, fs::path game, bool noTFT) -> void {
+static auto mod_copy(fs::path src, fs::path dst, fs::path game, bool noTFT, wad::Index const* shared_game = nullptr) -> void {
     lol_trace_func(lol_trace_var("{}", src), lol_trace_var("{}", dst), lol_trace_var("{}", game));
     lol_throw_if(src.empty());
     lol_throw_if(dst.empty());
@@ -90,7 +95,7 @@ static auto mod_copy(fs::path src, fs::path dst, fs::path game, bool noTFT) -> v
     if (src == dst) {
         logi("Creating tmp directory");
         auto tmp = fs::tmp_dir{dst.generic_string() + ".tmp"};
-        mod_copy(src, tmp.path, game, noTFT);
+        mod_copy(src, tmp.path, game, noTFT, shared_game);
 
         logi("Removing original directory");
         fs::remove_all(src);
@@ -105,9 +110,13 @@ static auto mod_copy(fs::path src, fs::path dst, fs::path game, bool noTFT) -> v
 
     if (!game.empty()) {
         logi("Indexing game wads");
-        auto game_index = wad::Index::from_game_folder(game);
+        auto owned_game = wad::Index{};
+        if (!shared_game) {
+            owned_game = wad::Index::from_game_folder(game);
+            owned_game.remove_filter(noTFT ? FILTER_TFT : FILTER_NONE);
+        }
+        auto const& game_index = shared_game ? *shared_game : owned_game;
         lol_throw_if_msg(game_index.mounts.empty(), "Not a valid Game folder");
-        game_index.remove_filter(noTFT ? FILTER_TFT : FILTER_NONE);
 
         logi("Rebasing wads");
         mod_index = mod_index.rebase_from_game(game_index);
@@ -146,7 +155,7 @@ static auto mod_export(fs::path src, fs::path dst, fs::path game, bool noTFT) ->
     utility::zip(tmp.path, dst);
 }
 
-static auto mod_import(fs::path src, fs::path dst, fs::path game, bool noTFT) -> void {
+static auto mod_import(fs::path src, fs::path dst, fs::path game, bool noTFT, wad::Index const* shared_game = nullptr) -> void {
     lol_trace_func(lol_trace_var("{}", src), lol_trace_var("{}", dst), lol_trace_var("{}", game));
     lol_throw_if(src.empty());
     lol_throw_if(dst.empty());
@@ -160,16 +169,16 @@ static auto mod_import(fs::path src, fs::path dst, fs::path game, bool noTFT) ->
             wad::Mounted::make_name(src));
         auto info = io::File::create(tmp.path / "META" / "info.json");
         info.write(0, info_json.data(), info_json.size());
-        mod_addwad(src, tmp.path, game, noTFT, false);
+        mod_addwad(src, tmp.path, game, noTFT, false, shared_game);
     } else if (auto filename = src.filename().generic_string();
                filename.ends_with(".zip") || filename.ends_with(".fantome")) {
         logi("Unzipping mod");
         utility::unzip(src, tmp.path);
 
         logi("Optimizing after unzipping");
-        mod_copy(tmp.path, tmp.path, game, noTFT);
+        mod_copy(tmp.path, tmp.path, game, noTFT, shared_game);
     } else if (fs::exists(src / "META" / "info.json")) {
-        mod_copy(src, tmp.path, game, noTFT);
+        mod_copy(src, tmp.path, game, noTFT, shared_game);
     } else {
         lol_throw_msg("Unsuported mod file!");
     }
@@ -183,23 +192,62 @@ static auto mod_import(fs::path src, fs::path dst, fs::path game, bool noTFT) ->
     tmp.move(dst);
 }
 
-static auto mod_mkoverlay(fs::path src, fs::path dst, fs::path game, fs::names mods, bool noTFT, bool ignoreConflict)
+// One immutable game index is reused sequentially: no races in lazily decoded WAD entries.
+static auto mod_import_list(fs::path manifest, fs::path dst, fs::path game, bool noTFT) -> void {
+    std::ifstream input(manifest);
+    lol_throw_if_msg(!input.is_open(), "Cannot open import manifest");
+    auto jobs = std::vector<std::pair<std::string, fs::path>>{};
+    for (std::string line; std::getline(input, line);) {
+        auto tab = line.find('\t');
+        lol_throw_if_msg(tab == std::string::npos, "Invalid import manifest");
+        auto name = line.substr(0, tab);
+        lol_throw_if_msg(name.size() != 24 || !name.ends_with(".pending") ||
+                         name.substr(0, 16).find_first_not_of("0123456789abcdef") != std::string::npos,
+                         "Invalid import directory");
+        jobs.emplace_back(std::move(name), fs::path(line.substr(tab + 1)));
+    }
+    if (jobs.empty()) return;
+    logi("Indexing game once for {} imports", jobs.size());
+    auto game_index = wad::Index::from_game_folder(game);
+    lol_throw_if_msg(game_index.mounts.empty(), "Not a valid Game folder");
+    game_index.remove_filter(noTFT ? FILTER_TFT : FILTER_NONE);
+    for (std::size_t i = 0; i < jobs.size(); ++i) {
+        mod_import(jobs[i].second, dst / jobs[i].first, game, noTFT, &game_index);
+        std::fprintf(stderr, "ImportProgress: %zu\n", i + 1);
+        std::fflush(stderr);
+    }
+}
+
+static auto mod_mkoverlay(fs::path src, fs::path dst, fs::path game, fs::names mods, bool noTFT, bool ignoreConflict, fs::path repair_cache = {})
     -> void {
     lol_trace_func(lol_trace_var("{}", src), lol_trace_var("{}", dst), lol_trace_var("{}", game));
     lol_throw_if(src.empty());
     lol_throw_if(dst.empty());
     lol_throw_if(game.empty());
 
+    auto phase_start = std::chrono::steady_clock::now();
+    auto phase = [&](char const* name){
+        logi("Perf: stage={} elapsed_ms={}",name,std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-phase_start).count());
+        phase_start=std::chrono::steady_clock::now();
+    };
     logi("Indexing game");
     auto game_index = wad::Index::from_game_folder(game);
     lol_throw_if_msg(game_index.mounts.empty(), "Not a valid Game folder");
     game_index.remove_filter(noTFT ? FILTER_TFT : FILTER_NONE);
 
+    phase("index_game");
     auto blocked = std::unordered_set<hash::Xxh64>{};
     for (auto const& [_, mounted] : game_index.mounts) {
         auto subchunk_name = fs::path(mounted.relpath).replace_extension(".SubChunkTOC").generic_string();
         blocked.insert(hash::Xxh64(subchunk_name));
     }
+    auto game_paths = std::unordered_set<std::uint64_t>{};
+    auto path_count = std::size_t{};
+    for (auto const& [_,mount] : game_index.mounts) path_count += mount.archive.entries.size();
+    game_paths.reserve(path_count);
+    for (auto const& [_,mount] : game_index.mounts)
+        for (auto const& [path,entry] : mount.archive.entries) game_paths.insert(path);
+    phase("shared_repair_paths");
     auto mod_queue = std::vector<wad::Index>{};
 
     logi("Reading mods");
@@ -213,7 +261,7 @@ static auto mod_mkoverlay(fs::path src, fs::path dst, fs::path game, fs::names m
             continue;
         }
 
-        if (auto const repaired = wad::repair_outdated_bins(mod_index, game_index)) {
+        if (auto const repaired = wad::repair_outdated_bins(mod_index, game_index, &game_paths, repair_cache)) {
             logi("Repaired {} outdated .bin file(s) in {}", repaired, mod_index.name);
         }
 
@@ -227,18 +275,22 @@ static auto mod_mkoverlay(fs::path src, fs::path dst, fs::path game, fs::names m
         mod_queue.push_back(std::move(mod_index));
     }
 
+    phase("read_repair_conflicts");
     auto overlay_index = wad::Index{};
     logi("Merging mods");
     for (auto& mod_index : mod_queue) {
         overlay_index.add_overlay_mod(game_index, mod_index);
     }
 
+    phase("merge_mods");
     logi("Writing wads");
     fs::create_directories(dst);
     overlay_index.write_to_directory(dst);
 
+    phase("write_wads");
     logi("Cleaning up stray wads");
     overlay_index.cleanup_in_directory(dst);
+    phase("cleanup_wads");
 }
 
 static auto mod_runoverlay(fs::path overlay, fs::path config_file, fs::path game, fs::names opts) -> void {
@@ -316,6 +368,7 @@ static auto help(fs::path cmd) -> void {
         "copy <src> <dst> --game:<path> --noTFT",
         "export <src> <dst> --game:<path> --noTFT",
         "import <src> <dst> --game:<path> --noTFT",
+        "import-list <manifest> <modsdir> --game:<path> --noTFT",
         "mkoverlay <modsdir> <overlay> --game:<path> --mods:<name1>/<name2>/<name3>... --noTFT --ignoreConflict",
         "runoverlay <overlay> <configfile> --game:<path> --opts:<none/configless>...",
         "help");
@@ -367,13 +420,16 @@ int main(int argc, char** argv) {
             mod_export(src, dst, flags["--game:"], flags.contains("--noTFT"));
         } else if (cmd == "import") {
             mod_import(src, dst, flags["--game:"], flags.contains("--noTFT"));
+        } else if (cmd == "import-list") {
+            mod_import_list(src, dst, flags["--game:"], flags.contains("--noTFT"));
         } else if (cmd == "mkoverlay") {
             mod_mkoverlay(src,
                           dst,
                           flags["--game:"],
                           flags["--mods:"],
                           flags.contains("--noTFT"),
-                          flags.contains("--ignoreConflict"));
+                          flags.contains("--ignoreConflict"),
+                          flags["--repair-cache:"]);
         } else if (cmd == "runoverlay") {
             mod_runoverlay(src, dst, flags["--game:"], flags["--opts:"]);
         } else {

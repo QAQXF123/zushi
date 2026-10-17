@@ -7,6 +7,8 @@
 #include <wad/archive.hpp>
 #include <numeric>
 #include <unordered_map>
+#include <chrono>
+#include <log.hpp>
 
 using namespace lol;
 using namespace lol::wad;
@@ -67,8 +69,74 @@ auto Archive::estimate_size() const noexcept -> std::size_t {
     return estimate;
 }
 
+// Reuse payload offsets in a private APFS clone. Only changed chunks are appended;
+// the old overlay is never opened for writing. No header is committed until the
+// complete plan has been checked for table overlap, bounds and compression type.
+static auto try_incremental_write(io::File& file, fs::path const& path,
+                                  Archive const& archive, TOC::latest_header_t const& header) -> bool {
+    using EntryT = TOC::latest_entry_t;
+    using HeaderT = TOC::latest_header_t;
+    auto toc = TOC{};
+    {
+        auto bytes = io::Bytes::from_file(path);
+        if (toc.read(bytes) || toc.version != TOC::Version::latest() || toc.entries.empty()) return false;
+    }
+    auto const old_size = file.size();
+    auto const estimate = archive.estimate_size();
+    // Periodically compact, instead of allowing obsolete chunks to accumulate forever.
+    if (old_size > estimate + std::max<std::size_t>(32 * io::MiB, estimate / 4)) return false;
+    auto const table_end = sizeof(HeaderT) + archive.entries.size() * sizeof(EntryT);
+    auto old_locations = std::unordered_map<std::uint64_t, EntryLoc>{};
+    for (auto const& entry : toc.entries) {
+        auto const& loc = entry.loc;
+        if (loc.offset < table_end || loc.offset > old_size || loc.size > old_size - loc.offset) return false;
+        if (loc.checksum) old_locations.emplace(loc.checksum, loc);
+    }
+    auto table = std::vector<EntryT>{};
+    auto writes = std::vector<std::pair<EntryLoc, EntryData>>{};
+    auto locations = std::unordered_map<std::uint64_t, EntryLoc>{};
+    auto cursor = old_size;
+    std::uint64_t reused_bytes = 0, written_bytes = 0;
+    for (auto const& [name, original] : archive.entries) {
+        auto data = original.into_optimal();
+        auto const checksum = data.checksum();
+        auto loc = EntryLoc{};
+        auto compatible = [&](EntryLoc const& old) {
+            return old.type == data.type() && old.size == data.bytes_size() &&
+                   old.size_decompressed == data.size_decompressed() &&
+                   old.subchunk_count == data.subchunk_count() && old.subchunk_index == data.subchunk_index();
+        };
+        if (auto i = locations.find(checksum); i != locations.end() && compatible(i->second)) {
+            loc = i->second;
+        } else if (auto i = old_locations.find(checksum); checksum && i != old_locations.end() && compatible(i->second)) {
+            loc = i->second; reused_bytes += loc.size;
+        } else {
+            if (cursor >= 4 * io::GiB || data.bytes_size() >= 4 * io::GiB - cursor ||
+                data.size_decompressed() >= 4 * io::GiB) return false;
+            loc = {.type=data.type(), .subchunk_count=data.subchunk_count(), .subchunk_index=data.subchunk_index(),
+                   .offset=cursor, .size=data.bytes_size(), .size_decompressed=data.size_decompressed(), .checksum=checksum};
+            cursor += loc.size; written_bytes += loc.size;
+            writes.emplace_back(loc, std::move(data));
+        }
+        locations.insert_or_assign(checksum, loc);
+        table.push_back(EntryT{.name=name,.offset=(std::uint32_t)loc.offset,.size=(std::uint32_t)loc.size,
+            .size_decompressed=(std::uint32_t)loc.size_decompressed,.type=loc.type,.subchunk_count=loc.subchunk_count,
+            .subchunk_index=loc.subchunk_index,.checksum=loc.checksum});
+    }
+    if (reused_bytes < estimate / 2) return false;
+    std::sort(table.begin(), table.end(), [](auto const& a, auto const& b){return a.name < b.name;});
+    for (auto const& [loc,data] : writes) file.write(loc.offset, data.bytes_data(), loc.size);
+    file.write(sizeof(HeaderT), table.data(), table.size() * sizeof(EntryT));
+    file.write(0, &header, sizeof(header));
+    file.resize(cursor);
+    logi("WadWrite: {} mode=incremental reused_bytes={} written_bytes={}", path.filename().generic_string(), reused_bytes,
+         written_bytes + sizeof(header) + table.size() * sizeof(EntryT));
+    return true;
+}
+
 auto Archive::write_to_file(fs::path const& path) const -> void {
     lol_trace_func(lol_trace_var("{}", path));
+    auto const started = std::chrono::steady_clock::now();
     using HeaderT = TOC::latest_header_t;
     using EntryT = TOC::latest_entry_t;
 
@@ -98,8 +166,10 @@ auto Archive::write_to_file(fs::path const& path) const -> void {
 
     if (auto old_header = HeaderT{}; file.readsome(0, &old_header, sizeof(HeaderT)) == sizeof(HeaderT)) {
         if (std::memcmp(&old_header, &new_header, sizeof(HeaderT)) == 0) {
+            logi("WadWrite: {} mode=unchanged bytes={}", path.filename().generic_string(), file.size());
             return;
         }
+        if (old_header.version == TOC::Version::latest() && try_incremental_write(file, path, *this, new_header)) return;
     }
 
     auto toc_entries = std::vector<EntryT>{};
@@ -172,6 +242,8 @@ auto Archive::write_to_file(fs::path const& path) const -> void {
 
     // Trunc data
     file.resize(data_cur);
+    logi("WadWrite: {} mode=full written_bytes={} elapsed_ms={}",path.filename().generic_string(),data_cur,
+         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count());
 }
 
 auto Archive::touch() -> void {

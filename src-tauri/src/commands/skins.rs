@@ -2,6 +2,7 @@ use crate::state::DownloadedSkin;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Read;
+use std::time::Duration;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -32,14 +33,47 @@ fn decode_path(s: &str) -> String {
     s.replace("%2F", "/")
 }
 
-fn skins_dir(app: &AppHandle) -> PathBuf {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .expect("failed to get app data dir")
-        .join("skins");
-    fs::create_dir_all(&dir).ok();
-    dir
+pub(super) fn skins_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let config = data.join("skin-storage.json");
+    let saved = fs::read(&config).ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|json| json.get("directory").and_then(|v| v.as_str()).map(PathBuf::from));
+    let dir = if let Some(saved) = saved {
+        if !saved.is_dir() {
+            return Err(format!("Skin library is unavailable: {}. Connect the external drive.", saved.display()));
+        }
+        saved
+    } else {
+        let mut libraries: Vec<PathBuf> = fs::read_dir("/Volumes").ok().into_iter().flatten()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path().join("ZushiSkins"))
+            .filter(|path| path.join(".zushi-library.json").is_file())
+            .collect();
+        libraries.sort();
+        match libraries.into_iter().next() {
+            Some(library) => {
+                fs::create_dir_all(&data).map_err(|e| e.to_string())?;
+                let bytes = serde_json::to_vec(&serde_json::json!({"directory": library})).map_err(|e| e.to_string())?;
+                fs::write(config, bytes).map_err(|e| e.to_string())?;
+                library
+            }
+            None => data.join("skins"),
+        }
+    };
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+#[tauri::command]
+pub async fn get_local_skin_library(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+    let directory = skins_dir(&app)?;
+    flatten(tauri::async_runtime::spawn_blocking(move || {
+        let metadata = directory.join(".zushi-library.json");
+        if !metadata.is_file() { return Ok(None); }
+        let bytes = fs::read(metadata).map_err(|e| e.to_string())?;
+        serde_json::from_slice(&bytes).map(Some).map_err(|e| e.to_string())
+    }).await)
 }
 
 /// Flatten a spawn_blocking result into our String error type.
@@ -50,6 +84,33 @@ fn flatten<T>(res: Result<Result<T, String>, impl std::fmt::Display>) -> Result<
     }
 }
 
+// Bound both connection setup and the complete response body read.
+fn download_file(url: &str, zip_path: &std::path::Path) -> Result<(), String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(15))
+        .timeout(Duration::from_secs(120))
+        .build();
+    download_file_with_agent(url, zip_path, &agent)
+}
+
+fn download_file_with_agent(url: &str, zip_path: &std::path::Path, agent: &ureq::Agent) -> Result<(), String> {
+    let response = agent.get(url).call()
+        .map_err(|e| format!("Download failed: {e}"))?;
+    let mut bytes = Vec::new();
+    response.into_reader().read_to_end(&mut bytes)
+        .map_err(|e| format!("Read failed: {e}"))?;
+    if bytes.is_empty() {
+        return Err("Downloaded file is empty".into());
+    }
+    // Publish only a complete file, so failed writes never appear as downloaded.
+    let temporary = zip_path.with_extension("zip.part");
+    let result = fs::write(&temporary, &bytes)
+        .and_then(|_| fs::rename(&temporary, zip_path))
+        .map_err(|e| format!("Write failed: {e}"));
+    if result.is_err() { let _ = fs::remove_file(&temporary); }
+    result
+}
+
 /// Download a single skin zip. Runs blocking I/O on a background thread.
 #[tauri::command]
 pub async fn download_skin(
@@ -58,7 +119,7 @@ pub async fn download_skin(
     champion_name: String,
     skin_name: String,
 ) -> Result<String, String> {
-    let base = skins_dir(&app);
+    let base = skins_dir(&app)?;
     flatten(
         tauri::async_runtime::spawn_blocking(move || {
             let skin_dir = base
@@ -68,20 +129,10 @@ pub async fn download_skin(
 
             let zip_path = skin_dir.join(format!("{}.zip", encode_path(&skin_name)));
 
-            let resp = ureq::get(&url)
-                .call()
-                .map_err(|e| format!("Download failed: {e}"))?;
-
-            let mut bytes = Vec::new();
-            resp.into_reader()
-                .read_to_end(&mut bytes)
-                .map_err(|e| format!("Read failed: {e}"))?;
-
-            if bytes.is_empty() {
-                return Err("Downloaded file is empty".to_string());
+            // Also skip on disk: a stale UI list must not re-download an existing skin.
+            if !fs::metadata(&zip_path).map(|meta| meta.is_file() && meta.len() > 0).unwrap_or(false) {
+                download_file(&url, &zip_path)?;
             }
-
-            fs::write(&zip_path, &bytes).map_err(|e| format!("Write failed: {e}"))?;
 
             Ok(zip_path.to_string_lossy().into_owned())
         })
@@ -96,13 +147,13 @@ pub async fn download_multiple_skins(
     app: AppHandle,
     items: Vec<DownloadItem>,
 ) -> Result<u32, String> {
-    let base = skins_dir(&app);
+    let base = skins_dir(&app)?;
     flatten(
         tauri::async_runtime::spawn_blocking(move || {
             let total = items.len() as u32;
             let mut success_count = 0u32;
 
-            for item in &items {
+            for (index, item) in items.iter().enumerate() {
                 let skin_dir = base
                     .join(encode_path(&item.champion_name))
                     .join(encode_path(&item.skin_name));
@@ -112,17 +163,7 @@ pub async fn download_multiple_skins(
 
                 let zip_path = skin_dir.join(format!("{}.zip", encode_path(&item.skin_name)));
 
-                let ok = (|| -> bool {
-                    let resp = match ureq::get(&item.url).call() {
-                        Ok(r) => r,
-                        Err(_) => return false,
-                    };
-                    let mut bytes = Vec::new();
-                    if resp.into_reader().read_to_end(&mut bytes).is_err() || bytes.is_empty() {
-                        return false;
-                    }
-                    fs::write(&zip_path, &bytes).is_ok()
-                })();
+                let ok = download_file(&item.url, &zip_path).is_ok();
 
                 if ok {
                     success_count += 1;
@@ -131,7 +172,7 @@ pub async fn download_multiple_skins(
                 app.emit(
                     "download-progress",
                     DownloadProgress {
-                        current: success_count,
+                        current: (index + 1) as u32,
                         total,
                         skin_name: item.skin_name.clone(),
                     },
@@ -147,7 +188,7 @@ pub async fn download_multiple_skins(
 
 #[tauri::command]
 pub async fn list_downloaded_skins(app: AppHandle) -> Result<Vec<DownloadedSkin>, String> {
-    let base = skins_dir(&app);
+    let base = skins_dir(&app)?;
     flatten(
         tauri::async_runtime::spawn_blocking(move || {
             let mut skins = Vec::new();
@@ -203,7 +244,7 @@ pub async fn delete_downloaded_skin(
     champion_name: String,
     skin_name: String,
 ) -> Result<(), String> {
-    let base = skins_dir(&app);
+    let base = skins_dir(&app)?;
     flatten(
         tauri::async_runtime::spawn_blocking(move || {
             let skin_dir = base
@@ -232,7 +273,7 @@ pub async fn delete_downloaded_skin(
 
 #[tauri::command]
 pub async fn get_skins_dir_size(app: AppHandle) -> Result<u64, String> {
-    let base = skins_dir(&app);
+    let base = skins_dir(&app)?;
     flatten(
         tauri::async_runtime::spawn_blocking(move || Ok(dir_size(&base))).await,
     )
@@ -240,7 +281,7 @@ pub async fn get_skins_dir_size(app: AppHandle) -> Result<u64, String> {
 
 #[tauri::command]
 pub async fn clear_all_skins(app: AppHandle) -> Result<(), String> {
-    let base = skins_dir(&app);
+    let base = skins_dir(&app)?;
     flatten(
         tauri::async_runtime::spawn_blocking(move || {
             if base.exists() {
@@ -254,3 +295,70 @@ pub async fn clear_all_skins(app: AppHandle) -> Result<(), String> {
 }
 
 use super::dir_size;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    fn output_path() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("zushi-download-test-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        fs::create_dir_all(&dir).unwrap();
+        dir.join("skin.zip")
+    }
+
+    fn server(response: &'static [u8], delay: Duration) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            stream.read(&mut request).unwrap();
+            std::thread::sleep(delay);
+            let _ = stream.write_all(response);
+        });
+        (url, handle)
+    }
+
+    #[test]
+    fn successful_download_is_published_without_partial_file() {
+        let (url, server) = server(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\nskin", Duration::ZERO);
+        let path = output_path();
+        download_file(&url, &path).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"skin");
+        assert!(!path.with_extension("zip.part").exists());
+        server.join().unwrap();
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn empty_and_truncated_downloads_do_not_replace_existing_skin() {
+        for response in [
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice(),
+            b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\nshort".as_slice(),
+        ] {
+            let (url, server) = server(response, Duration::ZERO);
+            let path = output_path();
+            fs::write(&path, b"existing").unwrap();
+            assert!(download_file(&url, &path).is_err());
+            assert_eq!(fs::read(&path).unwrap(), b"existing");
+            server.join().unwrap();
+            fs::remove_dir_all(path.parent().unwrap()).unwrap();
+        }
+    }
+
+    #[test]
+    fn stalled_response_times_out_without_creating_a_skin() {
+        let (url, server) = server(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nskin", Duration::from_millis(250));
+        let path = output_path();
+        let agent = ureq::AgentBuilder::new().timeout(Duration::from_millis(50)).build();
+        assert!(download_file_with_agent(&url, &path, &agent).is_err());
+        assert!(!path.exists());
+        server.join().unwrap();
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+}

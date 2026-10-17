@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs><linearGradient id="tile" x2="0" y2="1"><stop stop-color="#7c899a"/><stop offset="1" stop-color="#586678"/></linearGradient><linearGradient id="disc" x2="0" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#e1e5ea"/></linearGradient></defs>
+<rect x="64" y="64" width="896" height="896" rx="188" fill="url(#tile)" stroke="#a8b2bf" stroke-width="12"/>
+<circle cx="512" cy="512" r="336" fill="url(#disc)"/>
+<g transform="rotate(-13 512 512)">
+<path d="M282 356L561 312L674 359L722 414V634L640 659L596 626L586 572L548 577L557 650L475 660L463 578L425 583L437 666L361 677L304 565Z" fill="#101113"/>
+<path d="M354 366L373 514M432 351L452 508M511 339L531 502M589 351L606 485" fill="none" stroke="#f3f5f7" stroke-width="18"/>
+<path d="M670 445L558 509L578 560L660 525L701 552" fill="none" stroke="#f3f5f7" stroke-width="20" stroke-linejoin="round"/>
+<path d="M421 727H634V687H421Z" fill="#101113"/>
+</g></svg>

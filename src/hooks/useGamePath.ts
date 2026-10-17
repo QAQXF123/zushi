@@ -17,12 +17,9 @@ export function useGamePath() {
       .then((path) => {
         if (path) {
           setDetectedPath(path);
-          if (setupDone) {
-            setGamePathState(path);
-            setStatus("game-detected");
-          } else {
-            setStatus("setup");
-          }
+          setGamePathState(path);
+          setStatus("game-detected");
+          localStorage.setItem(SETUP_KEY, "true");
         } else {
           setStatus(setupDone ? "game-not-found" : "setup");
         }
@@ -53,6 +50,7 @@ export function useGamePath() {
       setGamePathState(validated);
       setStatus("game-detected");
       setError(null);
+      localStorage.setItem(SETUP_KEY, "true");
       return true;
     }
     return false;

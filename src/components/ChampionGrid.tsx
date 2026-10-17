@@ -1,4 +1,5 @@
-import { Search } from "lucide-react";
+import ChampionFilters from "./ChampionFilters";
+import { championDisplayName } from "../lib/championFilters";
 import { useChampions, championAvatar } from "../hooks/useChampions";
 import type { Champion } from "../types";
 
@@ -7,7 +8,7 @@ interface ChampionGridProps {
 }
 
 export default function ChampionGrid({ onSelect }: ChampionGridProps) {
-  const { champions, total, loading, error, search, setSearch } = useChampions();
+  const { champions, total, loading, error, search, setSearch, position, setPosition } = useChampions();
 
   if (loading) {
     return (
@@ -28,28 +29,8 @@ export default function ChampionGrid({ onSelect }: ChampionGridProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2.5">
-        <div className="relative max-w-64 flex-1">
-          <Search
-            size={14}
-            strokeWidth={1.5}
-            className="text-ink-muted pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
-          />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search champions..."
-            className="bg-charcoal-500 border-border text-ink placeholder:text-ink-muted focus:border-gold-500/60 w-full rounded-sm border py-1.5 pr-3 pl-8 text-sm transition-colors focus:outline-none"
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </div>
-        <span className="text-ink-muted text-[11px] tabular-nums select-none">
-          {champions.length}
-          {search.trim() ? ` / ${total}` : ""}
-        </span>
-      </div>
+      <ChampionFilters search={search} onSearchChange={setSearch} position={position} onPositionChange={setPosition} />
+      <span className="text-ink-muted px-4 pt-2 text-[11px]">{champions.length} / {total} 位英雄</span>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {champions.length > 0 ? (
@@ -59,7 +40,8 @@ export default function ChampionGrid({ onSelect }: ChampionGridProps) {
                 key={champ.key}
                 onClick={() => onSelect(champ)}
                 className="group flex cursor-pointer flex-col items-center gap-0.5 rounded-sm p-1.5 transition-transform duration-100 active:scale-[0.96]"
-                title={`${champ.name}, ${champ.title}`}
+                title={`${championDisplayName(champ)} · ${champ.name}, ${champ.title}`}
+                data-champion={champ.name}
               >
                 <div className="border-charcoal-50/30 group-hover:border-gold-400 bg-charcoal-500 h-14 w-14 overflow-hidden rounded-sm border transition-colors duration-150">
                   <img
@@ -71,7 +53,7 @@ export default function ChampionGrid({ onSelect }: ChampionGridProps) {
                   />
                 </div>
                 <span className="text-ink-muted group-hover:text-gold-300 w-full truncate text-center text-[10px] leading-tight transition-colors select-none">
-                  {champ.name}
+                  {championDisplayName(champ)}
                 </span>
               </button>
             ))}

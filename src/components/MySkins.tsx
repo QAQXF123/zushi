@@ -1,35 +1,15 @@
-import { useState, useEffect, useMemo } from "react";
-import { Layers, Check, Info, X, Search } from "lucide-react";
+import { memo, useState, useEffect, useMemo } from "react";
+import { Layers, Check, Info, X, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { splashUrl, findChampionByName, championAvatar } from "../hooks/useChampions";
-import { lookupSplashNum, lookupChromaInfo, ensureChromaInfo } from "../hooks/useSkinData";
+import { lookupSplashNum, lookupChromaInfo, ensureChromaInfo, ensureSkinIds } from "../hooks/useSkinData";
+import { downloadedChampionIndex, groupDownloadedSkins } from "../lib/downloadedSkins";
+import { championDisplayName, championMatchesSearch, championPositions, type Position } from "../lib/championFilters";
+import ChampionFilters from "./ChampionFilters";
 import type { DownloadedSkin } from "../types";
 
-function useChromaReady(): boolean {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    ensureChromaInfo()
-      .then(() => {
-        if (!cancelled) setReady(true);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return ready;
-}
-
-// base is null when the user only owns chromas of this base.
-type DownloadGroup = {
-  base: DownloadedSkin | null;
-  baseSkinName: string;
-  chromas: { dl: DownloadedSkin; colors: string[] }[];
-};
-
 type Selection = Record<string, string>;
-
 interface MySkinsProps {
+  focusChampion?: { name: string; stamp: number } | null;
   downloads: DownloadedSkin[];
   patcherActive: boolean;
   selection: Selection;
@@ -37,7 +17,19 @@ interface MySkinsProps {
   onDelete: (championName: string, skinName: string) => Promise<void>;
 }
 
-function SkinThumb({ championName, skinName }: { championName: string; skinName: string }) {
+function useSkinMetadata(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([ensureSkinIds(), ensureChromaInfo()]).then(() => {
+      if (!cancelled) setReady(true);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return ready;
+}
+
+const SkinThumb = memo(function SkinThumb({ championName, skinName }: { championName: string; skinName: string }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const champ = findChampionByName(championName);
@@ -60,13 +52,14 @@ function SkinThumb({ championName, skinName }: { championName: string; skinName:
           loaded ? "opacity-100" : "opacity-0",
         ].join(" ")}
         loading="lazy"
+        decoding="async"
         draggable={false}
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
       />
     </>
   );
-}
+});
 
 function ChampAvatar({ championName }: { championName: string }) {
   const [failed, setFailed] = useState(false);
@@ -85,21 +78,77 @@ function ChampAvatar({ championName }: { championName: string }) {
       src={championAvatar(champ.id)}
       alt={championName}
       className="h-8 w-8 rounded object-cover"
+      loading="lazy"
+      decoding="async"
       draggable={false}
       onError={() => setFailed(true)}
     />
   );
 }
 
-export default function MySkins({
-  downloads,
-  patcherActive,
-  selection,
-  onSelectionChange,
-  onDelete,
-}: MySkinsProps) {
-  const chromaReady = useChromaReady(); // re-render once Community Dragon chroma data lands
+export default function MySkins(props: MySkinsProps) {
+  const { downloads, selection } = props;
+  const [champion, setChampion] = useState<string | null>(props.focusChampion?.name ?? null);
+  useEffect(() => {
+    if (props.focusChampion) setChampion(props.focusChampion.name);
+  }, [props.focusChampion]);
+  const [search, setSearch] = useState("");
+  const [position, setPosition] = useState<Position | "all">("all");
+  const index = useMemo(() => downloadedChampionIndex(downloads), [downloads]);
+  const heroes = useMemo(() => [...index.entries()].filter(([name]) =>
+    championMatchesSearch(name, search) && (position === "all" || championPositions(name).includes(position))
+  ), [index, search, position]);
 
+  if (champion) {
+    return <ChampionSkins key={champion} {...props} champion={champion}
+      skins={index.get(champion) ?? []} onBack={() => setChampion(null)} />;
+  }
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+        <span className="text-ink text-sm">我的皮肤</span>
+        <span className="text-ink-muted text-xs tabular-nums">{index.size} 位英雄 · {downloads.length} 个皮肤及炫彩</span>
+      </div>
+      <ChampionFilters search={search} onSearchChange={setSearch} position={position} onPositionChange={setPosition} />
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {heroes.length === 0 ? (
+          <div className="text-ink-muted flex h-40 flex-col items-center justify-center gap-3">
+            <Layers size={24} />
+            <span className="text-sm">{downloads.length === 0 ? "还没有下载皮肤" : "没有符合筛选条件的英雄"}</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
+            {heroes.map(([name, skins]) => (
+              <button key={name} onClick={() => setChampion(name)} data-champion={name}
+                className="border-border bg-charcoal-500 hover:border-gold-400/60 flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors">
+                <ChampAvatar championName={name} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-ink truncate text-sm font-medium">{championDisplayName(name)}</p>
+                  <p className="text-ink-muted truncate text-[10px]">{name}</p>
+                  <p className="text-ink-muted mt-1 text-[10px]">{skins.length} 个皮肤及炫彩</p>
+                </div>
+                {selection[name] && <Check size={14} className="text-gold-400 shrink-0" aria-label="已选皮肤" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChampionSkins({ patcherActive, selection, onSelectionChange, onDelete,
+  champion, skins, onBack }: MySkinsProps & { champion: string; skins: DownloadedSkin[]; onBack: () => void }) {
+  const metadataReady = useSkinMetadata();
+  const groups = useMemo(() => {
+    void metadataReady;
+    return groupDownloadedSkins(skins, lookupChromaInfo);
+  }, [skins, metadataReady]);
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(groups.length / 24));
+  const currentPage = Math.min(page, pages - 1);
+  const visibleGroups = groups.slice(currentPage * 24, (currentPage + 1) * 24);
+  const selectedSkin = selection[champion];
   const toggleSkin = (championName: string, skinName: string) => {
     if (patcherActive) return;
     if (selection[championName] === skinName) {
@@ -132,132 +181,24 @@ export default function MySkins({
     await Promise.all(skinNames.map((n) => onDelete(championName, n)));
   };
 
-  const selectedCount = Object.keys(selection).length;
-  const [search, setSearch] = useState("");
-
-  // Grouping scans the ~9k skin database per skin, so memoize it on downloads
-  // (and chroma readiness) instead of rebuilding on every search/selection render.
-  const grouped = useMemo(() => {
-    void chromaReady; // recompute once Community Dragon chroma data lands
-    const map = new Map<string, DownloadGroup[]>();
-    for (const skin of downloads) {
-      const champGroups = map.get(skin.champion_name) ?? [];
-      const chromaInfo = lookupChromaInfo(skin.skin_name);
-      if (chromaInfo) {
-        let g = champGroups.find((g) => g.baseSkinName === chromaInfo.parentName);
-        if (!g) {
-          g = { base: null, baseSkinName: chromaInfo.parentName, chromas: [] };
-          champGroups.push(g);
-        }
-        g.chromas.push({ dl: skin, colors: chromaInfo.colors });
-      } else {
-        let g = champGroups.find((g) => g.baseSkinName === skin.skin_name);
-        if (!g) {
-          g = { base: skin, baseSkinName: skin.skin_name, chromas: [] };
-          champGroups.push(g);
-        } else {
-          g.base = skin;
-        }
-      }
-      map.set(skin.champion_name, champGroups);
-    }
-    return map;
-  }, [downloads, chromaReady]);
-
-  const filteredEntries = useMemo(() => {
-    const entries = [...grouped.entries()];
-    const query = search.trim().toLowerCase();
-    return query ? entries.filter(([champion]) => champion.toLowerCase().includes(query)) : entries;
-  }, [grouped, search]);
-
-  if (downloads.length === 0) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="border-border flex shrink-0 items-center border-b px-4 py-3">
-          <span className="text-ink-muted text-sm select-none">0 skins</span>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <div className="bg-charcoal-300 flex h-12 w-12 items-center justify-center rounded-full">
-            <Layers size={20} strokeWidth={1.5} className="text-ink-muted" />
-          </div>
-          <div>
-            <p className="text-ink-secondary text-sm">No skins downloaded yet</p>
-            <p className="text-ink-muted mt-1 text-xs">
-              Browse champions and download skins to get started
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  let baseSkinCount = 0;
-  for (const groups of grouped.values()) baseSkinCount += groups.length;
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
-        <span className="text-ink-muted text-sm tabular-nums select-none">
-          {baseSkinCount} {baseSkinCount === 1 ? "skin" : "skins"}
-        </span>
-
-        <div className="relative max-w-64 flex-1">
-          <Search
-            size={14}
-            strokeWidth={1.5}
-            className="text-ink-muted pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
-          />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by champion"
-            className="bg-charcoal-500 border-border text-ink placeholder:text-ink-muted focus:border-gold-500/60 w-full rounded-sm border py-1.5 pr-3 pl-8 text-sm transition-colors focus:outline-none"
-          />
-        </div>
-
-        {selectedCount > 0 && (
-          <span className="text-gold-400 ml-auto text-sm font-medium tabular-nums select-none">
-            {selectedCount} selected
-          </span>
-        )}
+        <button onClick={onBack} aria-label="返回英雄列表" className="text-ink-muted hover:text-ink flex h-8 w-8 cursor-pointer items-center justify-center rounded-md"><ArrowLeft size={18} /></button>
+        <ChampAvatar championName={champion} />
+        <span className="text-ink text-sm font-medium">{championDisplayName(champion)}</span>
+        <span className="text-ink-muted text-xs">{champion}</span>
+        <span className="text-ink-muted ml-auto text-xs">{skins.length} 个皮肤及炫彩</span>
       </div>
-
-      <div className="bg-gold-400/8 border-gold-400/15 mx-4 mt-3 mb-1 flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
-        <Info size={14} strokeWidth={1.5} className="text-gold-400 mt-0.5 shrink-0" />
-        <p className="text-ink-secondary text-xs leading-relaxed">
-          <span className="text-gold-400 font-medium">Keep the default skin</span> selected in
-          champion select. If you use a skin you already own, it will override your patched one.
-        </p>
+      <div className="border-gold-400/15 bg-gold-400/8 mx-4 mt-3 flex items-start gap-2 rounded-lg border px-3 py-2">
+        <Info size={14} className="text-gold-400 mt-0.5 shrink-0" />
+        <p className="text-ink-secondary text-xs">在此选择皮肤，再点击右下角 Apply。英雄联盟选人界面保持默认皮肤。{patcherActive && " 更换皮肤前请先点击 Stop。"}</p>
       </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col">
-          {filteredEntries.length === 0 && (
-            <div className="text-ink-muted flex h-32 items-center justify-center text-sm">
-              No champions match "{search}"
-            </div>
-          )}
-          {filteredEntries.map(([champion, groups]) => {
-            const selectedSkin = selection[champion];
-            const baseCount = groups.length;
-            return (
-              <div
-                key={champion}
-                className="border-border flex items-start gap-3 border-b px-4 py-3"
-              >
-                <div className="flex w-32 shrink-0 items-center gap-2.5 pt-0.5">
-                  <ChampAvatar championName={champion} />
-                  <div className="min-w-0">
-                    <p className="text-ink truncate text-xs font-medium">{champion}</p>
-                    <p className="text-ink-muted truncate text-[10px]">
-                      {baseCount} {baseCount === 1 ? "skin" : "skins"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-                  {groups.map((group) => {
+      {selectedSkin && <p className="text-gold-400 px-4 pt-2 text-xs">已选：{selectedSkin}</p>}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="flex flex-wrap items-start gap-3">
+                  {visibleGroups.map((group) => {
                     const baseSelected = selectedSkin === group.baseSkinName;
                     const selectedChroma = group.chromas.find(
                       (c) => c.dl.skin_name === selectedSkin
@@ -302,7 +243,7 @@ export default function MySkins({
                                 : `${group.baseSkinName} (base not downloaded)`
                             }
                           >
-                            <SkinThumb championName={champion} skinName={group.baseSkinName} />
+                            {metadataReady && <SkinThumb championName={champion} skinName={group.baseSkinName} />}
 
                             {baseSelected && (
                               <div className="bg-gold-400 absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/30 shadow-sm">
@@ -394,12 +335,16 @@ export default function MySkins({
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            );
-          })}
         </div>
+        {groups.length === 0 && <p className="text-ink-muted py-10 text-center text-sm">该英雄没有剩余皮肤</p>}
       </div>
+      {pages > 1 && (
+        <div className="border-border flex shrink-0 items-center justify-center gap-4 border-t px-4 py-2">
+          <button onClick={() => setPage(currentPage - 1)} disabled={currentPage === 0} aria-label="上一页" className="text-ink hover:text-gold-400 cursor-pointer disabled:cursor-default disabled:opacity-30"><ChevronLeft size={18} /></button>
+          <span className="text-ink-muted text-xs">{currentPage + 1} / {pages}</span>
+          <button onClick={() => setPage(currentPage + 1)} disabled={currentPage === pages - 1} aria-label="下一页" className="text-ink hover:text-gold-400 cursor-pointer disabled:cursor-default disabled:opacity-30"><ChevronRight size={18} /></button>
+        </div>
+      )}
     </div>
   );
 }

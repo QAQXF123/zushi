@@ -13,15 +13,20 @@ function getStatusInfo(s: PatcherStatus): { label: string; dotClass: string; spi
   if (typeof s === "object" && "Error" in s) {
     return { label: s.Error, dotClass: "bg-error", spinner: false };
   }
+  if(typeof s==="object"&&"ImportingSkins" in s)return {label:`准备皮肤 ${s.ImportingSkins.current} / ${s.ImportingSkins.total}${s.ImportingSkins.cached ? `（${s.ImportingSkins.cached} 个使用缓存）` : ""}`,dotClass:"bg-gold-400 animate-pulse",spinner:true};
   switch (s) {
     case "Idle":
       return { label: "Ready", dotClass: "bg-ink-muted", spinner: false };
+    case "CheckingCache":
+      return {label:"正在检查皮肤缓存…",dotClass:"bg-gold-400 animate-pulse",spinner:true};
+    case "ReusingOverlay":
+      return {label:"复用已准备的皮肤补丁…",dotClass:"bg-success",spinner:false};
     case "Importing":
       return { label: "Importing mods...", dotClass: "bg-gold-400 animate-pulse", spinner: true };
     case "BuildingOverlay":
-      return { label: "Building overlay...", dotClass: "bg-gold-400 animate-pulse", spinner: true };
+      return { label: "正在构建皮肤补丁…", dotClass: "bg-gold-400 animate-pulse", spinner: true };
     case "WaitingForGame":
-      return { label: "Waiting for game...", dotClass: "bg-gold-400 animate-pulse", spinner: true };
+      return { label: "皮肤已准备，等待游戏启动…", dotClass: "bg-gold-400 animate-pulse", spinner: true };
     case "FoundGame":
       return { label: "Game found!", dotClass: "bg-success", spinner: false };
     case "Scanning":

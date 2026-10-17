@@ -1,33 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   listDownloadedSkins,
   downloadSkin as downloadSkinCmd,
-  downloadMultipleSkins,
   deleteDownloadedSkin as deleteCmd,
   getSkinsDirSize,
   clearAllSkins as clearAllCmd,
 } from "../lib/commands";
 import type { DownloadedSkin } from "../types";
 
-interface QueueItem {
-  url: string;
-  championName: string;
-  skinName: string;
-}
-
-interface DownloadProgress {
-  current: number;
-  total: number;
-  skinName: string;
-}
+import { createDownloadQueue, downloadKey, type DownloadItem } from "../lib/downloadQueue";
 
 export function useDownloads() {
   const [downloads, setDownloads] = useState<DownloadedSkin[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cacheSize, setCacheSize] = useState(0);
-  const busy = useRef(false);
+  const [activeCount, setActiveCount] = useState(0);
+  const refreshGeneration = useRef(0);
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
 
   const refreshSize = useCallback(async () => {
     try {
@@ -39,9 +29,10 @@ export function useDownloads() {
   }, []);
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     try {
       const list = await listDownloadedSkins();
-      setDownloads(list);
+      if (generation === refreshGeneration.current) setDownloads(list);
     } catch {}
     await refreshSize();
   }, [refreshSize]);
@@ -57,51 +48,27 @@ export function useDownloads() {
     [downloads]
   );
 
-  const download = useCallback(
-    async (url: string, championName: string, skinName: string) => {
-      if (busy.current) return;
-      busy.current = true;
-      const key = `${championName}/${skinName}`;
-      setDownloading(key);
-      setError(null);
-      try {
-        await downloadSkinCmd(url, championName, skinName);
-      } catch (err) {
-        setError(String(err));
-      }
-      setDownloading(null);
-      busy.current = false;
-      await refresh();
+  const queue = useMemo(() => createDownloadQueue(
+    (item) => downloadSkinCmd(item.url, item.championName, item.skinName),
+    (active, pending, count) => {
+      setActiveCount(count);
+      setDownloading(active ? `${active.championName}/${active.skinName}` : null);
+      setPendingKeys(pending);
     },
-    [refresh]
-  );
+    setError,
+    refresh,
+  ), [refresh]);
 
-  const downloadMultiple = useCallback(
-    async (items: QueueItem[]) => {
-      if (busy.current || items.length === 0) return;
-      busy.current = true;
-      setDownloading("batch");
-      setError(null);
+  const downloadMultiple = useCallback((items: DownloadItem[]) => {
+    setError(null);
+    return queue.enqueue(items.filter((item) => !isDownloaded(item.championName, item.skinName)));
+  }, [queue, isDownloaded]);
 
-      const unlisten = await listen<DownloadProgress>("download-progress", (event) => {
-        setDownloading(
-          `${event.payload.skinName} (${event.payload.current}/${event.payload.total})`
-        );
-      });
+  const download = useCallback((url: string, championName: string, skinName: string) =>
+    downloadMultiple([{ url, championName, skinName }]), [downloadMultiple]);
 
-      try {
-        await downloadMultipleSkins(items);
-      } catch (err) {
-        setError(String(err));
-      }
-
-      unlisten();
-      setDownloading(null);
-      busy.current = false;
-      await refresh();
-    },
-    [refresh]
-  );
+  const isQueued = useCallback((championName: string, skinName: string) =>
+    pendingKeys.includes(downloadKey({ url: "", championName, skinName })), [pendingKeys]);
 
   const deleteSkin = useCallback(
     async (championName: string, skinName: string) => {
@@ -131,6 +98,9 @@ export function useDownloads() {
   return {
     downloads,
     downloading,
+    isQueued,
+    pendingCount: pendingKeys.length,
+    activeCount,
     error,
     cacheSize,
     isDownloaded,

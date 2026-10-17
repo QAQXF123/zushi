@@ -1,8 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import RandomSkinBar from "./components/RandomSkinBar";
+import { planRandomSkins, type RandomSkinPlan, type SkinQuality } from "./lib/randomSkins";
+import MatchHistory from "./components/MatchHistory";
+import ClientConnectionBar from "./components/ClientConnectionBar";
+import { useLeagueClient } from "./hooks/useLeagueClient";
+import { bundledChampions } from "./lib/championFilters";
+import LibraryDownloadBar from "./components/LibraryDownloadBar";
+import { useLibraryDownload } from "./hooks/useLibraryDownload";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { Swords, Layers, Package, Settings as SettingsIcon, Star } from "lucide-react";
+import { Swords, Layers, Package, Settings as SettingsIcon, Star, BarChart3 } from "lucide-react";
 import { useGamePath } from "./hooks/useGamePath";
 import { usePatcher } from "./hooks/usePatcher";
 import { useDownloads } from "./hooks/useDownloads";
@@ -23,22 +31,27 @@ import UpdateBanner from "./components/UpdateBanner";
 import type { Champion } from "./types";
 import logo from "./assets/icon.png";
 
-type View = "champions" | "my-skins" | "customs" | "settings";
+type View = "champions" | "my-skins" | "customs" | "settings" | "history";
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof Swords }[] = [
   { id: "champions", label: "Champions", icon: Swords },
   { id: "my-skins", label: "My Skins", icon: Layers },
+  { id: "history", label: "战绩查询", icon: BarChart3 },
   { id: "customs", label: "Customs", icon: Package },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 function App() {
   const { gamePath, detectedPath, status, selectPath, confirmSetup, checkPath } = useGamePath();
+  const client = useLeagueClient(gamePath);
   const patcher = usePatcher();
   const dl = useDownloads();
+  const library = useLibraryDownload(dl.refresh);
   const customs = useCustoms();
   const update = useVersionCheck();
   const [view, setView] = useState<View>("champions");
+  const [skinFocus, setSkinFocus] = useState<{ name: string; stamp: number } | null>(null);
+  const lastLocatedChampion = useRef(0);
   const [selectedChampion, setSelectedChampion] = useState<Champion | null>(null);
   const [skinSelection, setSkinSelection] = useState<Record<string, string>>(() => {
     try {
@@ -47,6 +60,10 @@ function App() {
     } catch {}
     return {};
   });
+  const [randomBusy,setRandomBusy]=useState(false);
+  const randomLock=useRef(false);
+  const [randomPlan,setRandomPlan]=useState<RandomSkinPlan|null>(null);
+  const [randomExcluded,setRandomExcluded]=useState(()=>localStorage.getItem("zushi:random-excluded")??"");
   const [appVersion, setAppVersion] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -86,8 +103,34 @@ function App() {
 
   function handleNavClick(id: View): void {
     setView(id);
+    setSkinFocus(null);
     if (id !== "champions") setSelectedChampion(null);
   }
+
+  const locateChampion = useCallback((id: number) => {
+    const champion = bundledChampions.find(c => Number(c.key) === id);
+    if (!champion) return;
+    if (dl.downloads.some(skin => skin.champion_name === champion.name)) {
+      setSkinFocus({ name: champion.name, stamp: Date.now() });
+      setSelectedChampion(null);
+      setView("my-skins");
+    } else {
+      setSelectedChampion(champion);
+      setView("champions");
+    }
+  }, [dl.downloads]);
+
+  useEffect(() => {
+    const snapshot = client.snapshot;
+    if (!client.autoLocate || snapshot.phase !== "ChampSelect" || !snapshot.championId) {
+      lastLocatedChampion.current = 0;
+      return;
+    }
+    if (snapshot.championId !== lastLocatedChampion.current) {
+      lastLocatedChampion.current = snapshot.championId;
+      locateChampion(snapshot.championId);
+    }
+  }, [client.snapshot, client.autoLocate, locateChampion]);
 
   const handleApply = useCallback(() => {
     const skinPaths: string[] = [];
@@ -101,6 +144,21 @@ function App() {
     if (allPaths.length > 0) patcher.apply(allPaths);
   }, [skinSelection, dl.downloads, customs.enabledPaths, patcher]);
 
+  const handleRandomApply=async()=>{
+    if(randomLock.current||patcher.isActive||!dl.downloads.length)return;
+    randomLock.current=true;setRandomBusy(true);
+    try{
+      const live=client.snapshot.connected?await invoke<Record<string,SkinQuality>>("get_client_skin_quality").catch(()=>undefined):undefined;
+      const plan=await planRandomSkins(dl.downloads,skinSelection,randomExcluded,live);
+      setRandomPlan(plan);
+      if(!plan.paths.length){setToastMessage("没有符合品质和排除规则的已下载皮肤，请下载更多皮肤或调整排除名单。");return;}
+      setSkinSelection(plan.selection);
+      await patcher.apply([...plan.paths,...customs.enabledPaths]);
+    }catch(error){setToastMessage(String(error));}
+    finally{randomLock.current=false;setRandomBusy(false);}
+  };
+  const changeRandomExcluded=(value:string)=>{setRandomExcluded(value);localStorage.setItem("zushi:random-excluded",value);};
+
   useEffect(() => {
     localStorage.setItem("zushi_skin_selection", JSON.stringify(skinSelection));
   }, [skinSelection]);
@@ -108,6 +166,7 @@ function App() {
   const skinCount = Object.keys(skinSelection).length;
 
   function renderContent() {
+    if (view === "history") return <MatchHistory account={client.snapshot.account} connected={client.snapshot.connected} />;
     if (view === "settings") {
       return (
         <div className="flex-1 overflow-y-auto">
@@ -140,6 +199,7 @@ function App() {
     if (view === "my-skins") {
       return (
         <MySkins
+          focusChampion={skinFocus}
           downloads={dl.downloads}
           patcherActive={patcher.isActive}
           selection={skinSelection}
@@ -155,7 +215,7 @@ function App() {
           champion={selectedChampion}
           onBack={() => setSelectedChampion(null)}
           isDownloaded={dl.isDownloaded}
-          downloading={dl.downloading}
+          isQueued={dl.isQueued}
           onDownload={dl.download}
           onDownloadAll={dl.downloadMultiple}
         />
@@ -223,9 +283,17 @@ function App() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="flex flex-1 flex-col overflow-hidden">{renderContent()}</main>
+        <ClientConnectionBar snapshot={client.snapshot} autoLocate={client.autoLocate}
+          onAutoLocateChange={client.setAutoLocate} onLocate={locateChampion} />
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {(view === "champions" || view === "my-skins") && <LibraryDownloadBar
+            progress={library.progress} busy={library.busy} count={dl.downloads.length}
+            onStart={library.start} onCancel={library.cancel} />}
+          {(view==="champions"||view==="my-skins")&&<RandomSkinBar busy={randomBusy} active={patcher.isActive} count={dl.downloads.length} plan={randomPlan} excluded={randomExcluded} onExclude={changeRandomExcluded} onApply={()=>void handleRandomApply()}/>}
+          <div className="min-h-0 flex-1 overflow-hidden">{renderContent()}</div>
+        </main>
 
-        <DownloadBar downloading={dl.downloading} />
+        <DownloadBar downloading={dl.downloading} pendingCount={dl.pendingCount} activeCount={dl.activeCount} />
 
         <StatusBar
           patcherStatus={patcher.status}

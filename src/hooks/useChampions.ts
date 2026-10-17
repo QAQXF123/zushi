@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import type { Champion } from "../types";
 import { getCached, setCache } from "../lib/cache";
+import { bundledChampions, championMatchesSearch, championPositions, type Position } from "../lib/championFilters";
 
 // Fallback when the version lookup fails; updated to the live latest at runtime.
-const FALLBACK_VERSION = "16.12.1";
+const FALLBACK_VERSION = "16.20.1";
 const VERSIONS_URL = "https://ddragon.leagueoflegends.com/api/versions.json";
 
 const CACHE_KEY = "zushi:champions_v3";
@@ -14,6 +15,7 @@ let versionResolved: Promise<string> | null = null;
 
 // Module-level cache so data survives component re-mounts
 let championsCache: Champion[] | null = null;
+const championIndex = new Map(bundledChampions.map((champion) => [champion.name, champion]));
 
 function ensureVersion(): Promise<string> {
   if (versionResolved) return versionResolved;
@@ -51,6 +53,7 @@ export function ensureChampions(): Promise<Champion[]> {
     const cached = getCached<Champion[]>(CACHE_KEY);
     if (cached) {
       championsCache = cached;
+      for (const champion of cached) championIndex.set(champion.name, champion);
       return cached;
     }
 
@@ -74,21 +77,26 @@ export function ensureChampions(): Promise<Champion[]> {
           }));
         list.sort((a, b) => a.name.localeCompare(b.name));
         championsCache = list;
+        for (const champion of list) championIndex.set(champion.name, champion);
         setCache(CACHE_KEY, list);
         return list;
+      }).catch(() => {
+        championsCache = bundledChampions;
+        return bundledChampions;
       });
   });
 }
 
 export function findChampionByName(name: string): Champion | undefined {
-  return championsCache?.find((c) => c.name === name);
+  return championIndex.get(name);
 }
 
 export function useChampions() {
-  const [champions, setChampions] = useState<Champion[]>(championsCache ?? []);
-  const [loading, setLoading] = useState(!championsCache);
+  const [champions, setChampions] = useState<Champion[]>(championsCache ?? bundledChampions);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [position, setPosition] = useState<Position | "all">("all");
 
   useEffect(() => {
     if (championsCache) return;
@@ -99,11 +107,10 @@ export function useChampions() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return champions;
-    const q = search.toLowerCase();
-    return champions.filter((c) => c.name.toLowerCase().includes(q));
-  }, [champions, search]);
+  const filtered = useMemo(() => champions.filter((champion) =>
+    championMatchesSearch(champion, search) &&
+    (position === "all" || championPositions(champion).includes(position))
+  ), [champions, search, position]);
 
   return {
     champions: filtered,
@@ -112,5 +119,7 @@ export function useChampions() {
     error,
     search,
     setSearch,
+    position,
+    setPosition,
   };
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCached, getStale, setCache } from "../lib/cache";
 import type { Champion, Skin, Chroma, SkinGroup } from "../types";
 
@@ -17,6 +18,28 @@ const CHROMAS_CACHE_KEY = "zushi:chromas";
 let skinIdsCache: Record<string, string> | null = null;
 let repoZipsCache: Map<string, string> | null = null;
 let chromaInfoCache: Map<number, { colors: string[]; parentId: number }> | null = null;
+
+interface LocalLibrary {
+  skinIds: Record<string, string>;
+  repoFiles: [string, string][];
+}
+let localLibrary: Promise<LocalLibrary | null> | null = null;
+function ensureLocalLibrary(): Promise<LocalLibrary | null> {
+  return localLibrary ??= invoke<LocalLibrary | null>("get_local_skin_library").catch(() => null);
+}
+
+export async function reloadLocalSkinLibrary(): Promise<void> {
+  localLibrary = null;
+  skinIdsCache = null;
+  repoZipsCache = null;
+  const library = await ensureLocalLibrary();
+  if (library) {
+    skinIdsCache = library.skinIds;
+    repoZipsCache = new Map(library.repoFiles);
+    setCache(SKIN_IDS_CACHE_KEY, library.skinIds);
+    setCache(REPO_ZIPS_CACHE_KEY, library.repoFiles);
+  }
+}
 
 // Reverse indices over skinIdsCache so name-based lookups are O(1) instead of
 // scanning all ~9k entries on every call (My Skins does this per skin, per render).
@@ -43,6 +66,12 @@ function ensureSkinIndexes(): void {
 export function ensureSkinIds(): Promise<Record<string, string>> {
   if (skinIdsCache) return Promise.resolve(skinIdsCache);
 
+  return ensureLocalLibrary().then((local) => {
+    if (local?.skinIds) {
+      skinIdsCache = local.skinIds;
+      setCache(SKIN_IDS_CACHE_KEY, local.skinIds);
+      return local.skinIds;
+    }
   const cached = getCached<Record<string, string>>(SKIN_IDS_CACHE_KEY);
   if (cached) {
     skinIdsCache = cached;
@@ -67,11 +96,18 @@ export function ensureSkinIds(): Promise<Record<string, string>> {
       }
       throw err;
     });
+  });
 }
 
 export function ensureRepoZips(): Promise<Map<string, string>> {
   if (repoZipsCache) return Promise.resolve(repoZipsCache);
 
+  return ensureLocalLibrary().then((local) => {
+    if (local?.repoFiles) {
+      repoZipsCache = new Map(local.repoFiles);
+      setCache(REPO_ZIPS_CACHE_KEY, local.repoFiles);
+      return repoZipsCache;
+    }
   const cached = getCached<[string, string][]>(REPO_ZIPS_CACHE_KEY);
   if (cached) {
     repoZipsCache = new Map(cached);
@@ -112,6 +148,7 @@ export function ensureRepoZips(): Promise<Map<string, string>> {
       }
       throw err;
     });
+  });
 }
 
 export function ensureChromaInfo(): Promise<Map<number, { colors: string[]; parentId: number }>> {

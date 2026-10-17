@@ -1,6 +1,7 @@
 #pragma once
 #include <common.hpp>
 #include <wad/index.hpp>
+#include <unordered_set>
 
 namespace lol::wad {
     // Brings a mod's .bin property files in line with the installed game's data layout.
@@ -12,5 +13,5 @@ namespace lol::wad {
     // so nothing here is tied to a specific patch or champion.
     //
     // Returns the number of .bin files that were changed.
-    auto repair_outdated_bins(Index& mod, Index const& game) -> std::size_t;
+    auto repair_outdated_bins(Index& mod, Index const& game, std::unordered_set<std::uint64_t> const* game_paths = nullptr, fs::path const& cache_dir = {}) -> std::size_t;
 }

@@ -8,7 +8,7 @@ interface ChampionDetailProps {
   champion: Champion;
   onBack: () => void;
   isDownloaded: (championName: string, skinName: string) => boolean;
-  downloading: string | null;
+  isQueued: (championName: string, skinName: string) => boolean;
   onDownload: (url: string, championName: string, skinName: string) => void;
   onDownloadAll: (items: { url: string; championName: string; skinName: string }[]) => void;
 }
@@ -78,7 +78,6 @@ function ChromaSwatch({
 function SkinCard({
   group,
   downloadKeyState,
-  busy,
   onDownloadGroup,
 }: {
   group: SkinGroup;
@@ -88,10 +87,13 @@ function SkinCard({
     available: boolean;
     url: string | null;
   };
-  busy: boolean;
   onDownloadGroup: (group: SkinGroup) => void;
 }) {
   const baseState = downloadKeyState(group.base);
+  const availableStates = [group.base, ...group.chromas]
+    .map(downloadKeyState).filter((state) => state.available);
+  const groupDownloaded = availableStates.length > 0 && availableStates.every((state) => state.downloaded);
+  const groupQueued = availableStates.some((state) => state.isDownloading);
 
   return (
     <div
@@ -106,15 +108,15 @@ function SkinCard({
         <SkinSplash skin={group.base} />
 
         <div className="absolute top-2 right-2 z-10">
-          {baseState.downloaded ? (
+          {groupQueued ? (
+            <span className="bg-gold-400/90 flex h-7 w-7 items-center justify-center rounded-full shadow-lg" title="Queued / downloading">
+              <Loader2 size={14} strokeWidth={2} className="animate-spin text-white" />
+            </span>
+          ) : groupDownloaded ? (
             <span className="bg-success/90 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 shadow-lg">
               <Check size={14} strokeWidth={2.5} className="text-white" />
             </span>
-          ) : baseState.isDownloading ? (
-            <span className="bg-gold-400/90 flex h-7 w-7 items-center justify-center rounded-full shadow-lg">
-              <Loader2 size={14} strokeWidth={2} className="animate-spin text-white" />
-            </span>
-          ) : baseState.available && !busy ? (
+          ) : baseState.available ? (
             <button
               onClick={() => onDownloadGroup(group)}
               className="bg-charcoal-600/80 hover:bg-gold-400 hover:text-charcoal-600 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-white opacity-0 shadow-lg transition-colors group-hover:opacity-100"
@@ -157,23 +159,21 @@ export default function ChampionDetail({
   champion,
   onBack,
   isDownloaded,
-  downloading,
+  isQueued,
   onDownload,
   onDownloadAll,
 }: ChampionDetailProps) {
   const { skins, groups, loading, error } = useSkinData(champion);
 
-  const busy = downloading !== null;
   const notDownloaded = skins.filter(
-    (s) => !isDownloaded(s.championName, s.name) && isSkinAvailable(s)
+    (s) => !isDownloaded(s.championName, s.name) && !isQueued(s.championName, s.name) && isSkinAvailable(s)
   );
   const allDownloaded = notDownloaded.length === 0 && skins.length > 0;
 
   const downloadKeyState = (skin: Skin) => {
-    const dlKey = `${skin.championName}/${skin.name}`;
     return {
       downloaded: isDownloaded(skin.championName, skin.name),
-      isDownloading: downloading === dlKey,
+      isDownloading: isQueued(skin.championName, skin.name),
       available: isSkinAvailable(skin),
       url: skinDownloadUrl(skin),
     };
@@ -194,7 +194,7 @@ export default function ChampionDetail({
     const items: { url: string; championName: string; skinName: string }[] = [];
     const candidates: Skin[] = [group.base, ...group.chromas];
     for (const s of candidates) {
-      if (isDownloaded(s.championName, s.name)) continue;
+      if (isDownloaded(s.championName, s.name) || isQueued(s.championName, s.name)) continue;
       const url = skinDownloadUrl(s);
       if (!url) continue;
       items.push({ url, championName: s.championName, skinName: s.name });
@@ -238,7 +238,7 @@ export default function ChampionDetail({
           {!loading && skins.length > 0 && !allDownloaded && (
             <button
               onClick={handleDownloadAll}
-              disabled={busy}
+              disabled={notDownloaded.length === 0}
               className="bg-gold-400 text-charcoal-600 hover:bg-gold-300 flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40"
             >
               <Download size={13} strokeWidth={2} />
@@ -269,7 +269,6 @@ export default function ChampionDetail({
                 key={group.base.id}
                 group={group}
                 downloadKeyState={downloadKeyState}
-                busy={busy}
                 onDownloadGroup={handleDownloadGroup}
               />
             ))}

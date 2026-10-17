@@ -3,6 +3,9 @@ export type AppStatus = "idle" | "setup" | "game-detected" | "game-not-found" | 
 export type PatcherStatus =
   | "Idle"
   | "Importing"
+  | { ImportingSkins: { current: number; total: number; cached?:number } }
+  | "CheckingCache"
+  | "ReusingOverlay"
   | "BuildingOverlay"
   | "WaitingForGame"
   | "FoundGame"
