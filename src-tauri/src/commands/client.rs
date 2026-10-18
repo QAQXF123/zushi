@@ -1,6 +1,9 @@
 //! Local client integration. Credentials stay in Rust and requests stay on loopback.
 //! Endpoint usage referenced from LeagueAkari's LCU HTTP helpers; no source copied.
 use crate::state::AppState;
+use super::history_store;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::fs;
@@ -22,7 +25,7 @@ pub struct ClientAccount {
 #[serde(rename_all = "camelCase")]
 pub struct ClientSnapshot {
     connected: bool, account: Option<ClientAccount>, phase: String,
-    champion_id: u64, error: Option<String>,
+    champion_id: u64, platform: String, error: Option<String>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,6 +115,26 @@ fn query_component(value: &str) -> String {
 fn valid_puuid(puuid: &str) -> bool {
     !puuid.is_empty() && puuid.len()<=200 && puuid.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b'-'|b'_'))
 }
+// Scoped to the live client connection; no credentials are written to disk.
+fn client_platform(connection:&Connection)->String {
+    use std::hash::{Hash,Hasher};
+    let mut hash=std::collections::hash_map::DefaultHasher::new();
+    connection.port.hash(&mut hash);connection.password.hash(&mut hash);let key=hash.finish();
+    static PLATFORMS:OnceLock<Mutex<Option<(u64,String,Instant)>>>=OnceLock::new();
+    let cache=PLATFORMS.get_or_init(||Mutex::new(None));
+    if let Ok(guard)=cache.lock(){if let Some((id,platform,at))=guard.as_ref(){if *id==key&&at.elapsed()<Duration::from_secs(300){return platform.clone();}}}
+    let platform=connection.request("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=0",None).ok()
+        .and_then(|v|v.pointer("/games/games/0/platformId").and_then(Value::as_str).map(str::to_uppercase))
+        .or_else(||connection.request("/lol-platform-config/v1/namespaces/LoginDataPacket",None).ok().and_then(|v|v.get("platformId").and_then(Value::as_str).map(str::to_uppercase))).unwrap_or_default();
+    if !platform.is_empty(){if let Ok(mut guard)=cache.lock(){*guard=Some((key,platform.clone(),Instant::now()));}}
+    platform
+}
+fn check_platform(connection:&Connection,expected:&str)->Result<String,String>{
+    let actual=client_platform(connection);
+    if actual.is_empty(){return Err("无法识别当前客户端区服，请等待登录完成后重试".into());}
+    if !expected.is_empty()&&actual!=expected{return Err(format!("当前连接的是 {actual}，请登录 {expected} 区服后更新；本地战绩仍可查看"));}
+    Ok(actual)
+}
 #[tauri::command]
 pub async fn get_client_snapshot(state: State<'_,Arc<Mutex<AppState>>>) -> Result<ClientSnapshot,String> {
     let path=game_path(&state);
@@ -144,24 +167,33 @@ pub async fn get_client_snapshot(state: State<'_,Arc<Mutex<AppState>>>) -> Resul
                     }
                 }
             }
-            Ok::<_,String>(ClientSnapshot {connected:true,account:Some(me),phase,champion_id:champion,error:None})
+            Ok::<_,String>(ClientSnapshot {connected:true,account:Some(me),phase,champion_id:champion,platform:client_platform(&connection),error:None})
         })();
-        result.unwrap_or_else(|e|ClientSnapshot{connected:false,account:None,phase:String::new(),champion_id:0,error:Some(e)})
+        result.unwrap_or_else(|e|ClientSnapshot{connected:false,account:None,phase:String::new(),champion_id:0,platform:String::new(),error:Some(e)})
     }).await.map_err(|e|e.to_string())
 }
 #[tauri::command]
-pub async fn get_client_match_history(state: State<'_,Arc<Mutex<AppState>>>, puuid: String, start: usize, count: usize, use_sgp: Option<bool>) -> Result<HistoryBatch,String> {
+pub async fn get_client_match_history(app:tauri::AppHandle,state: State<'_,Arc<Mutex<AppState>>>, puuid: String, start: usize, count: usize, use_sgp: Option<bool>, platform: Option<String>) -> Result<HistoryBatch,String> {
     if !valid_puuid(&puuid) {return Err("无效的玩家账号".into());}
     if start>=500 {return Ok(HistoryBatch{games:vec![],start,count:0,source:"LCU".into(),notice:None});}
     let count=count.clamp(1,20).min(500-start);
+    let cache_root=history_store::root(&app)?;
     let path=game_path(&state);
     tauri::async_runtime::spawn_blocking(move || {
         let connection=discover(path.as_deref())?;
+        let platform=check_platform(&connection,platform.as_deref().unwrap_or(""))?;
+        let started=Instant::now();
         let mut notice=None;
         if use_sgp==Some(true) {
             match sgp_history(&connection,&puuid,start,count) {
-                Ok(games)=>return Ok(HistoryBatch{count:games.len(),games,start,source:"SGP".into(),notice:None}),
-                Err(error)=>notice=Some(format!("云端战绩暂不可用，已回退客户端：{error}")),
+                Ok(mut games)=>{
+                    for game in &mut games {game["_platform"]=json!(platform);if game["participants"].as_array().map_or(false,|p|p.len()>1){
+                        history_store::write(&cache_root,"detail",&format!("{}:{}",platform,number(game,"gameId")),game)?;
+                    }}
+                    history_store::trace(&cache_root,"history-request",json!({"source":"SGP","start":start,"count":games.len(),"ms":started.elapsed().as_millis()}));
+                    return Ok(HistoryBatch{count:games.len(),games,start,source:"SGP".into(),notice:None});
+                },
+                Err(error)=>{if start>0{return Err(format!("云端分页中断，可稍后继续：{error}"));}notice=Some(format!("云端战绩暂不可用，已回退客户端：{error}"));},
             }
         }
         let data=connection.request(&format!("/lol-match-history/v1/products/lol/{puuid}/matches?begIndex={start}&endIndex={}",start+count-1),None)?;
@@ -170,6 +202,8 @@ pub async fn get_client_match_history(state: State<'_,Arc<Mutex<AppState>>>, puu
             return Err(format!("客户端忽略了分页参数，仍返回最近 20 场。{}",notice.unwrap_or_else(||"请启用云端战绩，使用 SGP 分页查询更多记录。".into())));
         }
         games.truncate(count);
+        for game in &mut games {game["_platform"]=json!(platform);game["_source"]=json!("LCU");}
+        history_store::trace(&cache_root,"history-request",json!({"source":"LCU","start":start,"count":games.len(),"ms":started.elapsed().as_millis()}));
         Ok(HistoryBatch{count:games.len(),games,start,source:"LCU".into(),notice})
     }).await.map_err(|e|e.to_string())?
 }
@@ -206,19 +240,25 @@ pub async fn search_client_player(state: State<'_,Arc<Mutex<AppState>>>, riot_id
     }).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
-pub async fn get_client_match_detail(state: State<'_,Arc<Mutex<AppState>>>, game_id: String, use_sgp: Option<bool>) -> Result<Value,String> {
+pub async fn get_client_match_detail(app:tauri::AppHandle,state: State<'_,Arc<Mutex<AppState>>>, game_id: String, use_sgp: Option<bool>, platform:String, offline:Option<bool>) -> Result<Value,String> {
     if game_id.is_empty()||game_id.len()>24||!game_id.bytes().all(|b|b.is_ascii_digit()) {return Err("无效的对局编号".into());}
     let path=game_path(&state);
+    let root=history_store::root(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let key=format!("{platform}:{game_id}");
+        if let Some(cached)=history_store::read(&root,"detail",&key)?{return Ok(cached);}
+        if offline==Some(true){return Err("此对局详情尚未缓存，请连接对应区服客户端后打开".into());}
         let connection=discover(path.as_deref())?;
-        if use_sgp==Some(true){
+        check_platform(&connection,&platform)?;
+        let mut game=if use_sgp==Some(true){
             let route=sgp_route(&connection)?;
             let data=sgp_request(&connection,&route,&format!("/match-history-query/v1/products/lol/{}_{game_id}/SUMMARY",route.platform))?;
-            return normalize_sgp(&data);
-        }
-        connection.request(&format!("/lol-match-history/v1/games/{game_id}"),None)
-    })
-        .await.map_err(|e|e.to_string())?
+            normalize_sgp(&data)?
+        } else {connection.request(&format!("/lol-match-history/v1/games/{game_id}"),None)?};
+        game["_platform"]=json!(platform);
+        history_store::write(&root,"detail",&key,&game)?;
+        Ok(game)
+    }).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
 pub async fn get_client_queues(state: State<'_,Arc<Mutex<AppState>>>) -> Result<Value,String> {
@@ -227,11 +267,12 @@ pub async fn get_client_queues(state: State<'_,Arc<Mutex<AppState>>>) -> Result<
 }
 
 #[tauri::command]
-pub async fn get_client_player_profile(state: State<'_,Arc<Mutex<AppState>>>, puuid:String)->Result<Value,String> {
+pub async fn get_client_player_profile(state: State<'_,Arc<Mutex<AppState>>>, puuid:String,platform:Option<String>)->Result<Value,String> {
     if !valid_puuid(&puuid) {return Err("无效的玩家账号".into());}
     let path=game_path(&state);
     tauri::async_runtime::spawn_blocking(move || {
         let connection=discover(path.as_deref())?;
+        check_platform(&connection,platform.as_deref().unwrap_or(""))?;
         let (profile,ranked)=std::thread::scope(|scope| {
             let profile=scope.spawn(||connection.request(&format!("/lol-summoner/v2/summoners/puuid/{puuid}"),None));
             let ranked=connection.request(&format!("/lol-ranked/v1/ranked-stats/{puuid}"),None);
@@ -263,17 +304,26 @@ pub async fn get_client_game_assets(state: State<'_,Arc<Mutex<AppState>>>)->Resu
     }).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
-pub async fn get_client_image(state: State<'_,Arc<Mutex<AppState>>>, path:String)->Result<String,String> {
+pub async fn get_client_image(app:tauri::AppHandle,state: State<'_,Arc<Mutex<AppState>>>, path:String)->Result<String,String> {
     use base64::Engine;
     if !path.starts_with("/lol-game-data/assets/")||path.contains("..")||path.contains('?')||path.contains('#')||!path.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b'/'|b'-'|b'_'|b'.')) {
         return Err("无效的客户端图片路径".into());
     }
     let mime=if path.ends_with(".png"){"image/png"}else if path.ends_with(".jpg")||path.ends_with(".jpeg"){"image/jpeg"}else{return Err("不支持的图片格式".into());};
     let game=game_path(&state);
+    let root=history_store::root(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let data=discover(game.as_deref())?.bytes(&path,None)?;
+        let cached=history_store::read(&root,"image",&path)?;
+        let cached_src=cached.as_ref().and_then(|v|v.get("src").and_then(Value::as_str).or_else(||v.as_str()));
+        let fresh=cached.as_ref().and_then(|v|v.get("fetchedAt")).and_then(Value::as_u64).map_or(false,|at|history_store::now().saturating_sub(at)<86_400_000);
+        if fresh {if let Some(src)=cached_src{return Ok(src.to_owned());}}
+        let data=match discover(game.as_deref()).and_then(|c|c.bytes(&path,None)){
+            Ok(data)=>data,Err(e)=>{if let Some(src)=cached_src{return Ok(src.to_owned());}return Err(e);}
+        };
         if data.len()>2_000_000 {return Err("图片过大".into());}
-        Ok(format!("data:{mime};base64,{}",base64::engine::general_purpose::STANDARD.encode(data)))
+        let src=format!("data:{mime};base64,{}",base64::engine::general_purpose::STANDARD.encode(data));
+        history_store::write(&root,"image",&path,&json!({"src":src,"fetchedAt":history_store::now()}))?;
+        Ok(src)
     }).await.map_err(|e|e.to_string())?
 }
 
@@ -291,8 +341,7 @@ pub async fn get_client_skin_quality(state:State<'_,Arc<Mutex<AppState>>>)->Resu
 #[derive(Serialize)]
 pub struct SgpRoute { platform:String, host:String }
 fn sgp_route(connection:&Connection)->Result<SgpRoute,String>{
-    let history=connection.request("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=0",None)?;
-    let platform=history.pointer("/games/games/0/platformId").and_then(Value::as_str).unwrap_or("").to_uppercase();
+    let platform=client_platform(connection);
     // Fixed destinations from League Akari's server configuration. Never accept a URL from the webview.
     let host=match platform.as_str(){
         "TW2"|"SG2"|"PH2"|"VN2"|"TH2"|"OC1"=>"https://apse1-red.pp.sgp.pvp.net",
@@ -324,7 +373,10 @@ fn normalize_sgp(data:&Value)->Result<Value,String>{
         let id=player.get("participantId").cloned().unwrap_or(json!(index+1));
         let mut stats=player.clone();
         if let Some(subteam)=player.get("playerSubteamId"){stats["subteamId"]=subteam.clone();}
-        if let Some(perk)=player.pointer("/perks/styles/0/selections/0/perk"){stats["perk0"]=perk.clone();}
+        if let Some(styles)=player.pointer("/perks/styles").and_then(Value::as_array){
+            let perks:Vec<_>=styles.iter().filter_map(|s|s.get("selections").and_then(Value::as_array)).flatten().filter_map(|s|s.get("perk")).collect();
+            for (i,perk) in perks.iter().take(6).enumerate(){stats[format!("perk{i}")]=(*perk).clone();}
+        }
         participants.push(json!({"participantId":id,"championId":player["championId"],"teamId":player["teamId"],"spell1Id":player.get("summoner1Id").or_else(||player.get("spell1Id")),"spell2Id":player.get("summoner2Id").or_else(||player.get("spell2Id")),"stats":stats}));
         identities.push(json!({"participantId":id,"player":{"puuid":player["puuid"],"summonerId":player["summonerId"],"summonerName":player["summonerName"],"gameName":player["riotIdGameName"],"tagLine":player["riotIdTagline"],"profileIcon":player["profileIcon"]}}));
     }
@@ -346,5 +398,18 @@ pub async fn get_client_sgp_route(app:tauri::AppHandle,state:State<'_,Arc<Mutex<
         let approved=consent.and_then(|p|fs::read_to_string(p).ok()).and_then(|s|serde_json::from_str::<Value>(&s).ok())
             .and_then(|v|v.get("hosts").and_then(Value::as_array).cloned()).map(|hosts|hosts.iter().any(|host|host.as_str()==Some(&route.host))).unwrap_or(false);
         Ok(json!({"platform":route.platform,"host":route.host,"approved":approved}))
+    }).await.map_err(|e|e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_client_champ_select(state:State<'_,Arc<Mutex<AppState>>>)->Result<Value,String>{
+    let path=game_path(&state);
+    tauri::async_runtime::spawn_blocking(move||{
+        let connection=discover(path.as_deref())?;
+        let session=connection.request("/lol-champ-select/v1/session",None)?;
+        let players:Vec<_>=session.get("myTeam").and_then(Value::as_array).into_iter().flatten().map(|p|json!({
+            "puuid":p["puuid"],"summonerId":p["summonerId"],"championId":p["championId"],"position":p["assignedPosition"],"cellId":p["cellId"]
+        })).collect();
+        Ok(json!({"players":players,"localCellId":session["localPlayerCellId"]}))
     }).await.map_err(|e|e.to_string())?
 }

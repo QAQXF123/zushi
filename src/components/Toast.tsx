@@ -1,3 +1,4 @@
+import { localize } from "../i18n";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
@@ -34,7 +35,7 @@ export default function Toast({ message, onClose, duration = 4000 }: ToastProps)
         visible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
       ].join(" ")}
     >
-      <span className="text-ink-secondary max-w-sm text-sm">{message}</span>
+      <span className="text-ink-secondary max-w-sm text-sm">{localize(message)}</span>
       <button
         onClick={() => {
           setVisible(false);

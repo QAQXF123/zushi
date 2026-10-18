@@ -1,7 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import type { Champion } from "../types";
 import { getCached, setCache } from "../lib/cache";
-import { bundledChampions, championMatchesSearch, championPositions, type Position } from "../lib/championFilters";
+import {
+  bundledChampions,
+  championMatchesSearch,
+  championPositions,
+  type Position,
+} from "../lib/championFilters";
 
 // Fallback when the version lookup fails; updated to the live latest at runtime.
 const FALLBACK_VERSION = "16.20.1";
@@ -38,7 +43,14 @@ function ensureVersion(): Promise<string> {
   return versionResolved;
 }
 
+const bundledAvatars = import.meta.glob<string>("../assets/champions/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
 export function championAvatar(id: string): string {
+  const local = bundledAvatars[`../assets/champions/${id}.png`];
+  if (local) return local;
   return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`;
 }
 
@@ -57,7 +69,9 @@ export function ensureChampions(): Promise<Champion[]> {
       return cached;
     }
 
-    return fetch(`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/data/en_US/champion.json`)
+    return fetch(
+      `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/data/en_US/champion.json`
+    )
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -80,7 +94,8 @@ export function ensureChampions(): Promise<Champion[]> {
         for (const champion of list) championIndex.set(champion.name, champion);
         setCache(CACHE_KEY, list);
         return list;
-      }).catch(() => {
+      })
+      .catch(() => {
         championsCache = bundledChampions;
         return bundledChampions;
       });
@@ -107,10 +122,15 @@ export function useChampions() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = useMemo(() => champions.filter((champion) =>
-    championMatchesSearch(champion, search) &&
-    (position === "all" || championPositions(champion).includes(position))
-  ), [champions, search, position]);
+  const filtered = useMemo(
+    () =>
+      champions.filter(
+        (champion) =>
+          championMatchesSearch(champion, search) &&
+          (position === "all" || championPositions(champion).includes(position))
+      ),
+    [champions, search, position]
+  );
 
   return {
     champions: filtered,

@@ -1,3 +1,4 @@
+import { localize, useLanguage } from "./i18n";
 import RandomSkinBar from "./components/RandomSkinBar";
 import { planRandomSkins, type RandomSkinPlan, type SkinQuality } from "./lib/randomSkins";
 import MatchHistory from "./components/MatchHistory";
@@ -42,6 +43,7 @@ const NAV_ITEMS: { id: View; label: string; icon: typeof Swords }[] = [
 ];
 
 function App() {
+  useLanguage();
   const { gamePath, detectedPath, status, selectPath, confirmSetup, checkPath } = useGamePath();
   const client = useLeagueClient(gamePath);
   const patcher = usePatcher();
@@ -60,10 +62,12 @@ function App() {
     } catch {}
     return {};
   });
-  const [randomBusy,setRandomBusy]=useState(false);
-  const randomLock=useRef(false);
-  const [randomPlan,setRandomPlan]=useState<RandomSkinPlan|null>(null);
-  const [randomExcluded,setRandomExcluded]=useState(()=>localStorage.getItem("zushi:random-excluded")??"");
+  const [randomBusy, setRandomBusy] = useState(false);
+  const randomLock = useRef(false);
+  const [randomPlan, setRandomPlan] = useState<RandomSkinPlan | null>(null);
+  const [randomExcluded, setRandomExcluded] = useState(
+    () => localStorage.getItem("zushi:random-excluded") ?? ""
+  );
   const [appVersion, setAppVersion] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -107,18 +111,21 @@ function App() {
     if (id !== "champions") setSelectedChampion(null);
   }
 
-  const locateChampion = useCallback((id: number) => {
-    const champion = bundledChampions.find(c => Number(c.key) === id);
-    if (!champion) return;
-    if (dl.downloads.some(skin => skin.champion_name === champion.name)) {
-      setSkinFocus({ name: champion.name, stamp: Date.now() });
-      setSelectedChampion(null);
-      setView("my-skins");
-    } else {
-      setSelectedChampion(champion);
-      setView("champions");
-    }
-  }, [dl.downloads]);
+  const locateChampion = useCallback(
+    (id: number) => {
+      const champion = bundledChampions.find((c) => Number(c.key) === id);
+      if (!champion) return;
+      if (dl.downloads.some((skin) => skin.champion_name === champion.name)) {
+        setSkinFocus({ name: champion.name, stamp: Date.now() });
+        setSelectedChampion(null);
+        setView("my-skins");
+      } else {
+        setSelectedChampion(champion);
+        setView("champions");
+      }
+    },
+    [dl.downloads]
+  );
 
   useEffect(() => {
     const snapshot = client.snapshot;
@@ -144,20 +151,35 @@ function App() {
     if (allPaths.length > 0) patcher.apply(allPaths);
   }, [skinSelection, dl.downloads, customs.enabledPaths, patcher]);
 
-  const handleRandomApply=async()=>{
-    if(randomLock.current||patcher.isActive||!dl.downloads.length)return;
-    randomLock.current=true;setRandomBusy(true);
-    try{
-      const live=client.snapshot.connected?await invoke<Record<string,SkinQuality>>("get_client_skin_quality").catch(()=>undefined):undefined;
-      const plan=await planRandomSkins(dl.downloads,skinSelection,randomExcluded,live);
+  const handleRandomApply = async () => {
+    if (randomLock.current || patcher.isActive || !dl.downloads.length) return;
+    randomLock.current = true;
+    setRandomBusy(true);
+    try {
+      const live = client.snapshot.connected
+        ? await invoke<Record<string, SkinQuality>>("get_client_skin_quality").catch(
+            () => undefined
+          )
+        : undefined;
+      const plan = await planRandomSkins(dl.downloads, skinSelection, randomExcluded, live);
       setRandomPlan(plan);
-      if(!plan.paths.length){setToastMessage("没有符合品质和排除规则的已下载皮肤，请下载更多皮肤或调整排除名单。");return;}
+      if (!plan.paths.length) {
+        setToastMessage("没有符合品质和排除规则的已下载皮肤，请下载更多皮肤或调整排除名单。");
+        return;
+      }
       setSkinSelection(plan.selection);
-      await patcher.apply([...plan.paths,...customs.enabledPaths]);
-    }catch(error){setToastMessage(String(error));}
-    finally{randomLock.current=false;setRandomBusy(false);}
+      await patcher.apply([...plan.paths, ...customs.enabledPaths]);
+    } catch (error) {
+      setToastMessage(String(error));
+    } finally {
+      randomLock.current = false;
+      setRandomBusy(false);
+    }
   };
-  const changeRandomExcluded=(value:string)=>{setRandomExcluded(value);localStorage.setItem("zushi:random-excluded",value);};
+  const changeRandomExcluded = (value: string) => {
+    setRandomExcluded(value);
+    localStorage.setItem("zushi:random-excluded", value);
+  };
 
   useEffect(() => {
     localStorage.setItem("zushi_skin_selection", JSON.stringify(skinSelection));
@@ -166,7 +188,7 @@ function App() {
   const skinCount = Object.keys(skinSelection).length;
 
   function renderContent() {
-    if (view === "history") return <MatchHistory account={client.snapshot.account} connected={client.snapshot.connected} />;
+    if (view === "history") return null;
     if (view === "settings") {
       return (
         <div className="flex-1 overflow-y-auto">
@@ -212,6 +234,7 @@ function App() {
     if (selectedChampion) {
       return (
         <ChampionDetail
+          key={selectedChampion.id}
           champion={selectedChampion}
           onBack={() => setSelectedChampion(null)}
           isDownloaded={dl.isDownloaded}
@@ -229,31 +252,35 @@ function App() {
     <div className="bg-charcoal-400 relative flex h-screen">
       <aside className="border-border flex w-50 shrink-0 flex-col border-r">
         <div className="flex items-end gap-2.5 px-4 py-4 select-none">
-          <img src={logo} alt="Zushi" className="h-9 w-9" />
-          <span className="font-logo text-gold-400 text-4xl leading-6 uppercase">Zushi</span>
+          <img src={logo} alt={localize("Zushi")} className="h-9 w-9" />
+          <span className="font-logo text-gold-400 text-4xl leading-6 uppercase">
+            {localize("Zushi")}
+          </span>
         </div>
 
         <div className="border-border mx-3 border-b" />
 
         <nav className="flex flex-col gap-1 p-3 select-none">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-            const active = view === id;
-            return (
-              <button
-                key={id}
-                onClick={() => handleNavClick(id)}
-                className={[
-                  "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-                  active
-                    ? "bg-charcoal-200 text-gold-400"
-                    : "text-ink-muted hover:text-ink hover:bg-charcoal-300",
-                ].join(" ")}
-              >
-                <Icon size={16} strokeWidth={1.5} />
-                {label}
-              </button>
-            );
-          })}
+          {localize(
+            NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+              const active = view === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleNavClick(id)}
+                  className={[
+                    "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                    active
+                      ? "bg-charcoal-200 text-gold-400"
+                      : "text-ink-muted hover:text-ink hover:bg-charcoal-300",
+                  ].join(" ")}
+                >
+                  <Icon size={16} strokeWidth={1.5} />
+                  {localize(label)}
+                </button>
+              );
+            })
+          )}
         </nav>
 
         <div className="mt-auto">
@@ -269,31 +296,73 @@ function App() {
               fill="currentColor"
               className="text-gold-400 shrink-0"
             />
-            <span className="whitespace-nowrap">Star Zushi on GitHub</span>
+            <span className="whitespace-nowrap">{localize("Star Zushi on GitHub")}</span>
           </button>
 
-          {update.updateAvailable && update.latestVersion ? (
-            <UpdateBanner version={update.latestVersion} releasesUrl={update.releasesUrl} />
-          ) : (
-            <div className="px-4 pb-4 select-none">
-              <span className="text-ink-muted text-xs">{appVersion ? `v${appVersion}` : ""}</span>
-            </div>
+          {localize(
+            update.updateAvailable && update.latestVersion ? (
+              <UpdateBanner version={update.latestVersion} releasesUrl={update.releasesUrl} />
+            ) : (
+              <div className="px-4 pb-4 select-none">
+                <span className="text-ink-muted text-xs">
+                  {localize(appVersion ? `v${appVersion}` : "")}
+                </span>
+              </div>
+            )
           )}
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <ClientConnectionBar snapshot={client.snapshot} autoLocate={client.autoLocate}
-          onAutoLocateChange={client.setAutoLocate} onLocate={locateChampion} />
+        <ClientConnectionBar
+          snapshot={client.snapshot}
+          autoLocate={client.autoLocate}
+          onAutoLocateChange={client.setAutoLocate}
+          onLocate={locateChampion}
+        />
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {(view === "champions" || view === "my-skins") && <LibraryDownloadBar
-            progress={library.progress} busy={library.busy} count={dl.downloads.length}
-            onStart={library.start} onCancel={library.cancel} />}
-          {(view==="champions"||view==="my-skins")&&<RandomSkinBar busy={randomBusy} active={patcher.isActive} count={dl.downloads.length} plan={randomPlan} excluded={randomExcluded} onExclude={changeRandomExcluded} onApply={()=>void handleRandomApply()}/>}
-          <div className="min-h-0 flex-1 overflow-hidden">{renderContent()}</div>
+          {localize(
+            (view === "champions" || view === "my-skins") && (
+              <LibraryDownloadBar
+                progress={library.progress}
+                busy={library.busy}
+                count={dl.downloads.length}
+                onStart={library.start}
+                onCancel={library.cancel}
+              />
+            )
+          )}
+          {localize(
+            (view === "champions" || view === "my-skins") && (
+              <RandomSkinBar
+                busy={randomBusy}
+                active={patcher.isActive}
+                count={dl.downloads.length}
+                plan={randomPlan}
+                excluded={randomExcluded}
+                onExclude={changeRandomExcluded}
+                onApply={() => void handleRandomApply()}
+              />
+            )
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <div className={view === "history" ? "h-full" : "hidden"}>
+              <MatchHistory
+                account={client.snapshot.account}
+                connected={client.snapshot.connected}
+                platform={client.snapshot.platform}
+                phase={client.snapshot.phase}
+              />
+            </div>
+            {localize(view !== "history" && renderContent())}
+          </div>
         </main>
 
-        <DownloadBar downloading={dl.downloading} pendingCount={dl.pendingCount} activeCount={dl.activeCount} />
+        <DownloadBar
+          downloading={dl.downloading}
+          pendingCount={dl.pendingCount}
+          activeCount={dl.activeCount}
+        />
 
         <StatusBar
           patcherStatus={patcher.status}
@@ -304,28 +373,32 @@ function App() {
         />
       </div>
 
-      {(toastMessage || dl.error) && (
-        <Toast
-          key={toastMessage ?? dl.error ?? ""}
-          message={toastMessage ?? dl.error ?? ""}
-          onClose={() => {
-            setToastMessage(null);
-            dl.clearError();
-            customs.clearError();
-          }}
-        />
+      {localize(
+        (toastMessage || dl.error) && (
+          <Toast
+            key={toastMessage ?? dl.error ?? ""}
+            message={toastMessage ?? dl.error ?? ""}
+            onClose={() => {
+              setToastMessage(null);
+              dl.clearError();
+              customs.clearError();
+            }}
+          />
+        )
       )}
 
-      {status !== "game-detected" && (
-        <div className="bg-charcoal-400 absolute inset-0 z-50">
-          <GamePathSelector
-            onConfirm={confirmSetup}
-            onSelect={selectPath}
-            onCheck={checkPath}
-            detectedPath={detectedPath}
-            status={status}
-          />
-        </div>
+      {localize(
+        status !== "game-detected" && (
+          <div className="bg-charcoal-400 absolute inset-0 z-50">
+            <GamePathSelector
+              onConfirm={confirmSetup}
+              onSelect={selectPath}
+              onCheck={checkPath}
+              detectedPath={detectedPath}
+              status={status}
+            />
+          </div>
+        )
       )}
     </div>
   );

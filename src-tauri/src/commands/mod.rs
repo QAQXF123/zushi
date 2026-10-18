@@ -6,6 +6,8 @@ pub mod patcher;
 pub mod skins;
 pub mod library;
 pub mod client;
+pub mod art_cache;
+pub mod history_store;
 
 use std::fs;
 use std::process::Command;

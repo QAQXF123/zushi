@@ -1,9 +1,18 @@
+import { clearArtwork } from "../lib/artwork";
+import { localize, useLanguage, setLanguage, type Language } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Power, FolderOpen, Trash2, Loader2, HardDrive } from "lucide-react";
-import { getSkinsDirSize, getWorkDirSize, getCustomsDirSize, clearAllSkins, clearWorkDir, clearAllCustoms } from "../lib/commands";
+import {
+  getSkinsDirSize,
+  getWorkDirSize,
+  getCustomsDirSize,
+  clearAllSkins,
+  clearWorkDir,
+  clearAllCustoms,
+} from "../lib/commands";
 import Toast from "./Toast";
 
 interface SettingsProps {
@@ -28,12 +37,15 @@ export default function Settings({
   onSkinsCleared,
   onCustomsCleared,
 }: SettingsProps) {
+  const language = useLanguage();
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
   const [pathLoading, setPathLoading] = useState(false);
   const [pathError, setPathError] = useState<string | null>(null);
 
   // Cache state
+  const [artSize, setArtSize] = useState(0);
+  const [clearingArt, setClearingArt] = useState(false);
   const [skinsSize, setSkinsSize] = useState(0);
   const [workSize, setWorkSize] = useState(0);
   const [cacheLoading, setCacheLoading] = useState(true);
@@ -51,7 +63,13 @@ export default function Settings({
   const refreshCache = useCallback(async () => {
     setCacheLoading(true);
     try {
-      const [s, w, c] = await Promise.all([getSkinsDirSize(), getWorkDirSize(), getCustomsDirSize()]);
+      const [s, w, c, art] = await Promise.all([
+        getSkinsDirSize(),
+        getWorkDirSize(),
+        getCustomsDirSize(),
+        invoke<{ bytes: number }>("get_art_cache_info"),
+      ]);
+      setArtSize(art.bytes);
       setSkinsSize(s);
       setWorkSize(w);
       setCustomsSize(c);
@@ -88,16 +106,16 @@ export default function Settings({
     try {
       const selected = await open({
         multiple: false,
-        title: "Select League of Legends app",
+        title: localize("Select League of Legends app"),
       });
       if (selected) {
         const valid = await onPathChange(selected as string);
         if (!valid) {
-          setPathError("Invalid game path: LeagueofLegends.app not found");
+          setPathError(localize("Invalid game path: LeagueofLegends.app not found"));
         }
       }
     } catch {
-      setPathError("Failed to open file dialog.");
+      setPathError(localize("Failed to open file dialog."));
     } finally {
       setPathLoading(false);
     }
@@ -129,26 +147,43 @@ export default function Settings({
   };
 
   const contentSize = skinsSize + customsSize;
-  const totalSize = skinsSize + workSize + customsSize;
+  const totalSize = skinsSize + workSize + customsSize + artSize;
 
   return (
     <div className="h-full w-full overflow-y-auto p-5">
       {/* General */}
       <div className="pb-2">
         <span className="text-ink-muted text-[11px] font-medium tracking-wider uppercase select-none">
-          General
+          {localize("General")}
         </span>
       </div>
 
       <div className="border-border divide-border divide-y rounded-lg border">
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+          <div>
+            <p className="text-ink text-sm">{localize("界面语言")}</p>
+            <p className="text-ink-muted mt-1 text-xs">
+              {localize("立即切换界面语言，重启后保留选择")}
+            </p>
+          </div>
+          <select
+            aria-label={localize("界面语言")}
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            className="bg-charcoal-500 border-border text-ink rounded border px-3 py-2 text-sm"
+          >
+            <option value="zh">简体中文</option>
+            <option value="en">English</option>
+          </select>
+        </div>
         {/* Auto-start */}
         <div className="flex items-center justify-between px-4 py-3.5">
           <div className="flex items-center gap-3">
             <Power size={16} strokeWidth={1.5} className="text-ink-muted" />
             <div className="flex flex-col gap-0.5">
-              <span className="text-ink text-sm">Launch at login</span>
+              <span className="text-ink text-sm">{localize("Launch at login")}</span>
               <span className="text-ink-muted text-xs">
-                Start Zushi automatically when you log in
+                {localize("Start Zushi automatically when you log in")}
               </span>
             </div>
           </div>
@@ -176,9 +211,9 @@ export default function Settings({
           <div className="flex min-w-0 items-center gap-3">
             <FolderOpen size={16} strokeWidth={1.5} className="text-ink-muted shrink-0" />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-ink text-sm">Game path</span>
+              <span className="text-ink text-sm">{localize("Game path")}</span>
               <span className="text-ink-muted truncate font-mono text-xs">
-                {gamePath ?? "Not set"}
+                {localize(gamePath ?? "Not set")}
               </span>
             </div>
           </div>
@@ -187,7 +222,7 @@ export default function Settings({
             disabled={pathLoading}
             className="border-border text-ink-secondary hover:border-gold-400 hover:text-gold-400 shrink-0 cursor-pointer rounded-md border px-3.5 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pathLoading ? "Validating..." : "Change"}
+            {localize(pathLoading ? "Validating..." : "Change")}
           </button>
         </div>
       </div>
@@ -195,16 +230,16 @@ export default function Settings({
       {/* Storage */}
       <div className="mt-6 pb-2">
         <span className="text-ink-muted text-[11px] font-medium tracking-wider uppercase select-none">
-          Storage
+          {localize("Storage")}
         </span>
       </div>
 
       {/* Total usage */}
       <div className="border-border mb-3 flex items-center gap-3 rounded-lg border px-4 py-3.5">
         <HardDrive size={16} strokeWidth={1.5} className="text-ink-muted shrink-0" />
-        <span className="text-ink flex-1 text-sm">Total usage</span>
+        <span className="text-ink flex-1 text-sm">{localize("Total usage")}</span>
         <span className="text-ink text-sm font-medium tabular-nums">
-          {cacheLoading ? "..." : formatSize(totalSize)}
+          {localize(cacheLoading ? "..." : formatSize(totalSize))}
         </span>
       </div>
 
@@ -212,60 +247,103 @@ export default function Settings({
         {/* Skins & custom mods */}
         <div className="flex items-center justify-between px-4 py-3.5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-ink text-sm">Skins &amp; Custom Mods</span>
-            <span className="text-ink-muted text-xs">Downloaded skins and imported mods</span>
+            <span className="text-ink text-sm">{localize("Skins & Custom Mods")}</span>
+            <span className="text-ink-muted text-xs">
+              {localize("Downloaded skins and imported mods")}
+            </span>
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <span className="text-ink-secondary min-w-16 text-right text-sm tabular-nums">
-              {cacheLoading ? "..." : formatSize(contentSize)}
+              {localize(cacheLoading ? "..." : formatSize(contentSize))}
             </span>
             <button
               onClick={handleClearContent}
               disabled={clearingContent || contentSize === 0 || patcherActive}
               className="border-border text-ink-secondary hover:text-error hover:border-error/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors disabled:pointer-events-none disabled:opacity-30"
             >
-              {clearingContent ? (
-                <Loader2 size={13} strokeWidth={2} className="animate-spin" />
-              ) : (
-                <Trash2 size={13} strokeWidth={1.5} />
+              {localize(
+                clearingContent ? (
+                  <Loader2 size={13} strokeWidth={2} className="animate-spin" />
+                ) : (
+                  <Trash2 size={13} strokeWidth={1.5} />
+                )
               )}
-              Clear
+              {localize("Clear")}
             </button>
           </div>
         </div>
 
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+          <div>
+            <p className="text-ink text-sm">{localize("皮肤预览图片缓存")}</p>
+            <p className="text-ink-muted mt-1 text-xs">
+              {localize("已查看的原画保存在本地，切换页面和重启后优先复用；清理不影响已下载皮肤")}
+            </p>
+          </div>
+          <span className="text-ink-secondary ml-auto text-sm">{formatSize(artSize)}</span>
+          <button
+            disabled={clearingArt || artSize === 0}
+            onClick={async () => {
+              setClearingArt(true);
+              try {
+                await clearArtwork();
+                await refreshCache();
+              } catch (e) {
+                setPathError(String(e));
+              } finally {
+                setClearingArt(false);
+              }
+            }}
+            className="border-border text-ink-secondary rounded border px-3 py-1.5 text-xs disabled:opacity-30"
+          >
+            {localize(clearingArt ? "正在清理…" : "Clear")}
+          </button>
+        </div>
         {/* Patcher data */}
         <div className="flex items-center justify-between px-4 py-3.5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-ink text-sm">Patcher Data</span>
-            <span className="text-ink-muted text-xs">已处理的皮肤与补丁缓存；清理后下次应用需要重新准备</span>
-            <button onClick={()=>void invoke("open_apply_log").catch(()=>{})} className="text-gold-400 mt-1 cursor-pointer text-left text-xs">打开应用耗时日志</button>
+            <span className="text-ink text-sm">{localize("Patcher Data")}</span>
+            <span className="text-ink-muted text-xs">
+              {localize("已处理的皮肤与补丁缓存；清理后下次应用需要重新准备")}
+            </span>
+            <button
+              onClick={() => void invoke("open_apply_log").catch(() => {})}
+              className="text-gold-400 mt-1 cursor-pointer text-left text-xs"
+            >
+              {localize("打开应用耗时日志")}
+            </button>
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <span className="text-ink-secondary min-w-16 text-right text-sm tabular-nums">
-              {cacheLoading ? "..." : formatSize(workSize)}
+              {localize(cacheLoading ? "..." : formatSize(workSize))}
             </span>
             <button
               onClick={handleClearWork}
               disabled={clearingWork || workSize === 0 || patcherActive}
               className="border-border text-ink-secondary hover:text-error hover:border-error/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors disabled:pointer-events-none disabled:opacity-30"
             >
-              {clearingWork ? (
-                <Loader2 size={13} strokeWidth={2} className="animate-spin" />
-              ) : (
-                <Trash2 size={13} strokeWidth={1.5} />
+              {localize(
+                clearingWork ? (
+                  <Loader2 size={13} strokeWidth={2} className="animate-spin" />
+                ) : (
+                  <Trash2 size={13} strokeWidth={1.5} />
+                )
               )}
-              Clear
+              {localize("Clear")}
             </button>
           </div>
         </div>
       </div>
 
-      {patcherActive && (
-        <p className="text-ink-muted mt-2 px-1 text-xs">Stop the patcher before clearing data.</p>
+      {localize(
+        patcherActive && (
+          <p className="text-ink-muted mt-2 px-1 text-xs">
+            {localize("Stop the patcher before clearing data.")}
+          </p>
+        )
       )}
 
-      {pathError && <Toast message={pathError} onClose={() => setPathError(null)} />}
+      {localize(pathError && <Toast message={pathError} onClose={() => setPathError(null)} />)}
     </div>
   );
 }

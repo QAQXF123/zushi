@@ -1,3 +1,6 @@
+import bundledChromas from "../data/chromas.json";
+import skinNamesZh from "../i18n/skin-names-zh.json";
+import { addSkinTranslations } from "../i18n";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCached, getStale, setCache } from "../lib/cache";
@@ -17,7 +20,17 @@ const CHROMAS_CACHE_KEY = "zushi:chromas";
 
 let skinIdsCache: Record<string, string> | null = null;
 let repoZipsCache: Map<string, string> | null = null;
-let chromaInfoCache: Map<number, { colors: string[]; parentId: number }> | null = null;
+type ChromaEntry = [number, { colors: string[]; parentId: number }];
+const savedChromas =
+  getCached<ChromaEntry[]>(CHROMAS_CACHE_KEY) ?? getStale<ChromaEntry[]>(CHROMAS_CACHE_KEY) ?? [];
+let chromaInfoCache = new Map<number, { colors: string[]; parentId: number }>([
+  ...(bundledChromas as unknown as ChromaEntry[]),
+  ...savedChromas,
+]);
+let chromaRefresh: Promise<Map<number, { colors: string[]; parentId: number }>> | null = null;
+export function skinMetadataReady() {
+  return !!skinIdsCache;
+}
 
 interface LocalLibrary {
   skinIds: Record<string, string>;
@@ -25,7 +38,7 @@ interface LocalLibrary {
 }
 let localLibrary: Promise<LocalLibrary | null> | null = null;
 function ensureLocalLibrary(): Promise<LocalLibrary | null> {
-  return localLibrary ??= invoke<LocalLibrary | null>("get_local_skin_library").catch(() => null);
+  return (localLibrary ??= invoke<LocalLibrary | null>("get_local_skin_library").catch(() => null));
 }
 
 export async function reloadLocalSkinLibrary(): Promise<void> {
@@ -63,7 +76,22 @@ function ensureSkinIndexes(): void {
   indexedFrom = skinIdsCache;
 }
 
+let localizedIds: Record<string, string> | null = null;
 export function ensureSkinIds(): Promise<Record<string, string>> {
+  return loadSkinIds().then((ids) => {
+    if (localizedIds !== ids) {
+      localizedIds = ids;
+      const names = skinNamesZh as Record<string, string>;
+      addSkinTranslations(
+        Object.entries(ids)
+          .filter(([id]) => !!names[id])
+          .map(([id, name]) => [names[id], name])
+      );
+    }
+    return ids;
+  });
+}
+function loadSkinIds(): Promise<Record<string, string>> {
   if (skinIdsCache) return Promise.resolve(skinIdsCache);
 
   return ensureLocalLibrary().then((local) => {
@@ -72,30 +100,30 @@ export function ensureSkinIds(): Promise<Record<string, string>> {
       setCache(SKIN_IDS_CACHE_KEY, local.skinIds);
       return local.skinIds;
     }
-  const cached = getCached<Record<string, string>>(SKIN_IDS_CACHE_KEY);
-  if (cached) {
-    skinIdsCache = cached;
-    return Promise.resolve(cached);
-  }
+    const cached = getCached<Record<string, string>>(SKIN_IDS_CACHE_KEY);
+    if (cached) {
+      skinIdsCache = cached;
+      return Promise.resolve(cached);
+    }
 
-  return fetch(SKIN_IDS_URL)
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    })
-    .then((data: Record<string, string>) => {
-      skinIdsCache = data;
-      setCache(SKIN_IDS_CACHE_KEY, data);
-      return data;
-    })
-    .catch((err) => {
-      const stale = getStale<Record<string, string>>(SKIN_IDS_CACHE_KEY);
-      if (stale) {
-        skinIdsCache = stale;
-        return stale;
-      }
-      throw err;
-    });
+    return fetch(SKIN_IDS_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data: Record<string, string>) => {
+        skinIdsCache = data;
+        setCache(SKIN_IDS_CACHE_KEY, data);
+        return data;
+      })
+      .catch((err) => {
+        const stale = getStale<Record<string, string>>(SKIN_IDS_CACHE_KEY);
+        if (stale) {
+          skinIdsCache = stale;
+          return stale;
+        }
+        throw err;
+      });
   });
 }
 
@@ -108,65 +136,61 @@ export function ensureRepoZips(): Promise<Map<string, string>> {
       setCache(REPO_ZIPS_CACHE_KEY, local.repoFiles);
       return repoZipsCache;
     }
-  const cached = getCached<[string, string][]>(REPO_ZIPS_CACHE_KEY);
-  if (cached) {
-    repoZipsCache = new Map(cached);
-    return Promise.resolve(repoZipsCache);
-  }
+    const cached = getCached<[string, string][]>(REPO_ZIPS_CACHE_KEY);
+    if (cached) {
+      repoZipsCache = new Map(cached);
+      return Promise.resolve(repoZipsCache);
+    }
 
-  return fetch(TREE_API_URL)
-    .then((res) => {
-      if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-      return res.json();
-    })
-    .then((data: { tree: { path: string; type: string }[] }) => {
-      const map = new Map<string, string>();
-      for (const entry of data.tree) {
-        if (entry.type !== "blob" || !entry.path.startsWith("skins/")) continue;
-        // Paths are id-based, e.g. "skins/222/222020/222025/222025.fantome".
-        // The filename stem is the skin id, matching skin_ids.json keys.
-        const filename = entry.path.split("/").pop() ?? "";
-        const ext = filename.endsWith(".fantome")
-          ? ".fantome"
-          : filename.endsWith(".zip")
-            ? ".zip"
-            : null;
-        if (!ext) continue;
-        const skinId = filename.slice(0, -ext.length);
-        if (!/^\d+$/.test(skinId)) continue;
-        map.set(skinId, entry.path);
-      }
-      repoZipsCache = map;
-      setCache(REPO_ZIPS_CACHE_KEY, [...map.entries()]);
-      return map;
-    })
-    .catch((err) => {
-      const stale = getStale<[string, string][]>(REPO_ZIPS_CACHE_KEY);
-      if (stale) {
-        repoZipsCache = new Map(stale);
-        return repoZipsCache;
-      }
-      throw err;
-    });
+    return fetch(TREE_API_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+        return res.json();
+      })
+      .then((data: { tree: { path: string; type: string }[] }) => {
+        const map = new Map<string, string>();
+        for (const entry of data.tree) {
+          if (entry.type !== "blob" || !entry.path.startsWith("skins/")) continue;
+          // Paths are id-based, e.g. "skins/222/222020/222025/222025.fantome".
+          // The filename stem is the skin id, matching skin_ids.json keys.
+          const filename = entry.path.split("/").pop() ?? "";
+          const ext = filename.endsWith(".fantome")
+            ? ".fantome"
+            : filename.endsWith(".zip")
+              ? ".zip"
+              : null;
+          if (!ext) continue;
+          const skinId = filename.slice(0, -ext.length);
+          if (!/^\d+$/.test(skinId)) continue;
+          map.set(skinId, entry.path);
+        }
+        repoZipsCache = map;
+        setCache(REPO_ZIPS_CACHE_KEY, [...map.entries()]);
+        return map;
+      })
+      .catch((err) => {
+        const stale = getStale<[string, string][]>(REPO_ZIPS_CACHE_KEY);
+        if (stale) {
+          repoZipsCache = new Map(stale);
+          return repoZipsCache;
+        }
+        throw err;
+      });
   });
 }
 
 export function ensureChromaInfo(): Promise<Map<number, { colors: string[]; parentId: number }>> {
-  if (chromaInfoCache) return Promise.resolve(chromaInfoCache);
-
-  const cached = getCached<[number, { colors: string[]; parentId: number }][]>(CHROMAS_CACHE_KEY);
-  if (cached) {
-    chromaInfoCache = new Map(cached);
-    return Promise.resolve(chromaInfoCache);
-  }
-
-  return fetch(SKINS_JSON_URL)
+  if (!chromaRefresh && !getCached<ChromaEntry[]>(CHROMAS_CACHE_KEY)) void refreshChromaInfo();
+  return Promise.resolve(chromaInfoCache);
+}
+function refreshChromaInfo() {
+  chromaRefresh = fetch(SKINS_JSON_URL)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     })
     .then((data: Record<string, { id: number; chromas?: { id: number; colors?: string[] }[] }>) => {
-      const map = new Map<number, { colors: string[]; parentId: number }>();
+      const map = new Map(chromaInfoCache);
       for (const [, skin] of Object.entries(data)) {
         if (!skin.chromas) continue;
         for (const c of skin.chromas) {
@@ -178,9 +202,9 @@ export function ensureChromaInfo(): Promise<Map<number, { colors: string[]; pare
       return map;
     })
     .catch(() => {
-      chromaInfoCache = new Map();
       return chromaInfoCache;
     });
+  return chromaRefresh;
 }
 
 export function getSkinsForChampion(champion: Champion, skinIds: Record<string, string>): Skin[] {
@@ -348,8 +372,12 @@ export function isSkinAvailable(skin: Skin): boolean {
 
 export function useSkinData(champion: Champion | null) {
   const [skinIds, setSkinIds] = useState<Record<string, string> | null>(skinIdsCache);
-  const [skins, setSkins] = useState<Skin[]>([]);
-  const [groups, setGroups] = useState<SkinGroup[]>([]);
+  const [skins, setSkins] = useState<Skin[]>(() =>
+    champion && skinIdsCache ? getSkinsForChampion(champion, skinIdsCache) : []
+  );
+  const [groups, setGroups] = useState<SkinGroup[]>(() =>
+    champion && skinIdsCache ? getSkinsGroupedForChampion(champion, skinIdsCache) : []
+  );
   const [loading, setLoading] = useState(!skinIdsCache || !repoZipsCache);
   const [error, setError] = useState<string | null>(null);
 

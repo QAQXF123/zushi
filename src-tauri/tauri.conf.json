@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Zushi",
-  "version": "0.1.14",
+  "version": "0.1.18",
   "identifier": "com.zushi.app",
   "build": {
     "frontendDist": "../dist",
@@ -15,8 +15,10 @@
         "title": "Zushi",
         "width": 1280,
         "height": 720,
-        "resizable": false,
-        "maximizable": false,
+        "minWidth": 1080,
+        "minHeight": 680,
+        "resizable": true,
+        "maximizable": true,
         "center": true,
         "decorations": true,
         "visible": false,
@@ -37,7 +39,9 @@
       "icons/icon.icns",
       "icons/icon.png"
     ],
-    "externalBin": ["binaries/mod-tools"],
+    "externalBin": [
+      "binaries/mod-tools"
+    ],
     "macOS": {
       "minimumSystemVersion": "10.15"
     }

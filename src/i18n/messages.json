@@ -1,0 +1,1358 @@
+[
+  [
+    "英雄",
+    "Champions"
+  ],
+  [
+    "我的皮肤",
+    "My Skins"
+  ],
+  [
+    "自定义模组",
+    "Customs"
+  ],
+  [
+    "设置",
+    "Settings"
+  ],
+  [
+    "通用",
+    "General"
+  ],
+  [
+    "界面语言",
+    "Language"
+  ],
+  [
+    "立即切换界面语言，重启后保留选择",
+    "Changes apply immediately and are saved for next launch"
+  ],
+  [
+    "开机启动",
+    "Launch at login"
+  ],
+  [
+    "登录电脑时自动启动 Zushi",
+    "Start Zushi automatically when you log in"
+  ],
+  [
+    "游戏路径",
+    "Game path"
+  ],
+  [
+    "未设置",
+    "Not set"
+  ],
+  [
+    "更改",
+    "Change"
+  ],
+  [
+    "正在校验…",
+    "Validating..."
+  ],
+  [
+    "存储空间",
+    "Storage"
+  ],
+  [
+    "总占用",
+    "Total usage"
+  ],
+  [
+    "皮肤与自定义模组",
+    "Skins & Custom Mods"
+  ],
+  [
+    "已下载的皮肤和导入的模组",
+    "Downloaded skins and imported mods"
+  ],
+  [
+    "清理",
+    "Clear"
+  ],
+  [
+    "补丁缓存",
+    "Patcher Data"
+  ],
+  [
+    "清理数据前请先停止换肤。",
+    "Stop the patcher before clearing data."
+  ],
+  [
+    "选择英雄联盟应用",
+    "Select League of Legends app"
+  ],
+  [
+    "无法打开文件选择窗口。",
+    "Failed to open file dialog."
+  ],
+  [
+    "游戏路径无效：未找到英雄联盟应用",
+    "Invalid game path: LeagueofLegends.app not found"
+  ],
+  [
+    "校验路径时出错。",
+    "Something went wrong while validating the path."
+  ],
+  [
+    "选择英雄联盟游戏路径",
+    "Select your League of Legends game path"
+  ],
+  [
+    "欢迎使用 Zushi",
+    "Welcome to Zushi"
+  ],
+  [
+    "未找到英雄联盟",
+    "League of Legends not found"
+  ],
+  [
+    "已检测到英雄联盟安装目录。",
+    "We detected your League of Legends installation."
+  ],
+  [
+    "请选择英雄联盟游戏路径以开始使用。",
+    "Select your League of Legends game path to get started."
+  ],
+  [
+    "选择其他路径",
+    "Select another path"
+  ],
+  [
+    "正在加载英雄…",
+    "Loading champions..."
+  ],
+  [
+    "无法加载英雄数据",
+    "Failed to load champion data"
+  ],
+  [
+    "未找到英雄",
+    "No champions found"
+  ],
+  [
+    "正在加载皮肤…",
+    "Loading skins..."
+  ],
+  [
+    "无法加载皮肤数据",
+    "Failed to load skin data"
+  ],
+  [
+    "暂无可用皮肤",
+    "No skins available"
+  ],
+  [
+    "暂无预览",
+    "No preview"
+  ],
+  [
+    "不可用",
+    "Not available"
+  ],
+  [
+    "全部下载",
+    "Download All"
+  ],
+  [
+    "下载",
+    "Download"
+  ],
+  [
+    "排队中 / 下载中",
+    "Queued / downloading"
+  ],
+  [
+    "皮肤",
+    "Skin"
+  ],
+  [
+    "皮肤",
+    "Skins"
+  ],
+  [
+    "炫彩",
+    "Chroma"
+  ],
+  [
+    "炫彩",
+    "Chromas"
+  ],
+  [
+    "已就绪",
+    "Ready"
+  ],
+  [
+    "应用",
+    "Apply"
+  ],
+  [
+    "停止",
+    "Stop"
+  ],
+  [
+    "停止换肤",
+    "Stop patcher"
+  ],
+  [
+    "正在导入模组…",
+    "Importing mods..."
+  ],
+  [
+    "已找到游戏！",
+    "Game found!"
+  ],
+  [
+    "正在扫描游戏…",
+    "Scanning game..."
+  ],
+  [
+    "皮肤已应用！",
+    "Mods applied!"
+  ],
+  [
+    "游戏中",
+    "In game"
+  ],
+  [
+    "对局已结束，准备下一局…",
+    "Game ended — ready for next..."
+  ],
+  [
+    "个自定义模组",
+    "customs"
+  ],
+  [
+    "个自定义模组",
+    "custom"
+  ],
+  [
+    "个皮肤",
+    "skin"
+  ],
+  [
+    "个皮肤",
+    "skins"
+  ],
+  [
+    "已启用",
+    "active"
+  ],
+  [
+    "请先停止换肤再添加模组",
+    "Stop the patcher to add mods"
+  ],
+  [
+    "将模组拖到这里",
+    "Drop mods here"
+  ],
+  [
+    "或点击浏览文件",
+    "or click to browse"
+  ],
+  [
+    "暂无自定义模组",
+    "No custom mods yet"
+  ],
+  [
+    "排队中",
+    "queued"
+  ],
+  [
+    "可用更新",
+    "available"
+  ],
+  [
+    "下载更新",
+    "Download update"
+  ],
+  [
+    "在 GitHub 上支持 Zushi",
+    "Star Zushi on GitHub"
+  ],
+  [
+    "删除皮肤",
+    "Delete skin"
+  ],
+  [
+    "搜索英雄中文名、称号或英文名",
+    "Search champions by name, title or alias"
+  ],
+  [
+    "搜索英雄",
+    "Search champions"
+  ],
+  [
+    "位置筛选",
+    "Filter by role"
+  ],
+  [
+    "全部",
+    "All"
+  ],
+  [
+    "上单",
+    "Top"
+  ],
+  [
+    "打野",
+    "Jungle"
+  ],
+  [
+    "中单",
+    "Mid"
+  ],
+  [
+    "下路",
+    "Bot"
+  ],
+  [
+    "辅助",
+    "Support"
+  ],
+  [
+    "位英雄",
+    "champions"
+  ],
+  [
+    "位英雄 ·",
+    "champions ·"
+  ],
+  [
+    "个皮肤及炫彩",
+    "skins and chromas"
+  ],
+  [
+    "还没有下载皮肤",
+    "No downloaded skins yet"
+  ],
+  [
+    "没有符合筛选条件的英雄",
+    "No champions match these filters"
+  ],
+  [
+    "已选皮肤",
+    "Selected skin"
+  ],
+  [
+    "返回英雄列表",
+    "Back to champions"
+  ],
+  [
+    "在此选择皮肤，再点击右下角 Apply。英雄联盟选人界面保持默认皮肤。",
+    "Select a skin here, then click Apply at the bottom right. Keep the default skin selected in the League client."
+  ],
+  [
+    "更换皮肤前请先点击 Stop。",
+    "Click Stop before changing skins."
+  ],
+  [
+    "已选：",
+    "Selected:"
+  ],
+  [
+    "该英雄没有剩余皮肤",
+    "No remaining skins for this champion"
+  ],
+  [
+    "大厅",
+    "Lobby"
+  ],
+  [
+    "匹配中",
+    "Matchmaking"
+  ],
+  [
+    "等待确认",
+    "Ready check"
+  ],
+  [
+    "选择英雄",
+    "Champion select"
+  ],
+  [
+    "游戏启动中",
+    "Starting game"
+  ],
+  [
+    "等待战绩",
+    "Waiting for results"
+  ],
+  [
+    "对局结束",
+    "Game ended"
+  ],
+  [
+    "结算",
+    "Post-game"
+  ],
+  [
+    "等待重连",
+    "Reconnect"
+  ],
+  [
+    "客户端就绪",
+    "Client ready"
+  ],
+  [
+    "英雄联盟客户端",
+    "League client"
+  ],
+  [
+    "客户端已连接",
+    "Client connected"
+  ],
+  [
+    "正在连接客户端…",
+    "Connecting to client…"
+  ],
+  [
+    "自动定位英雄",
+    "Follow selected champion"
+  ],
+  [
+    "定位皮肤",
+    "Find champion skins"
+  ],
+  [
+    "召唤师技能",
+    "Summoner spells"
+  ],
+  [
+    "主符文",
+    "Keystone"
+  ],
+  [
+    "空装备栏",
+    "Empty item slot"
+  ],
+  [
+    "正在校验仓库并读取皮肤索引…",
+    "Checking repository and reading skin index…"
+  ],
+  [
+    "正在停止，已导入的皮肤会保留…",
+    "Stopping; imported skins will be kept…"
+  ],
+  [
+    "已停止，可再次点击继续获取，已有文件会跳过",
+    "Stopped. Resume to continue; existing files will be skipped."
+  ],
+  [
+    "一键获取全部皮肤",
+    "Get all champion skins"
+  ],
+  [
+    "停止获取",
+    "Stop download"
+  ],
+  [
+    "全英雄优质皮肤随机应用",
+    "Apply random quality skins"
+  ],
+  [
+    "每个英雄一个 · 优先传说/终极，再选史诗/神话 · 跳过原皮、炫彩及未知品质",
+    "One per champion · Prefer legendary/ultimate, then epic/mythic · Skip base skins, chromas and unknown quality"
+  ],
+  [
+    "收起",
+    "Collapse"
+  ],
+  [
+    "选择规则 / 排除名单",
+    "Selection rules / exclusions"
+  ],
+  [
+    "请先点击 Stop，再随机并应用新的皮肤",
+    "Click Stop before choosing and applying new random skins"
+  ],
+  [
+    "随机选择全部已下载英雄的优质皮肤，并直接启动应用",
+    "Choose a quality skin for every downloaded champion and apply"
+  ],
+  [
+    "正在选择…",
+    "Choosing…"
+  ],
+  [
+    "一键随机并应用",
+    "Randomize and apply"
+  ],
+  [
+    "已为",
+    "Selected skins for"
+  ],
+  [
+    "位英雄选择皮肤",
+    "champions"
+  ],
+  [
+    "正在应用，准备完成后保持软件运行。",
+    "Applying. Keep the app running after preparation."
+  ],
+  [
+    "选择已保存。",
+    "Selection saved."
+  ],
+  [
+    "品质依据客户端元数据，不是玩家评分。优先选传说、终极、超凡和殿堂皮肤；没有时优先选特效主题史诗/神话。排除部分老版传说皮肤。无法确认品质时跳过，不用普通皮肤补齐。再次随机尽量避开上一次的选择。",
+    "Quality uses client metadata, not player ratings. Prefer legendary, ultimate and higher tiers, then selected epic/mythic themes. Some older legendary skins are excluded. Unknown quality is skipped. Randomizing again tries to avoid the previous selection."
+  ],
+  [
+    "排除你不喜欢的皮肤或系列（英文名称关键词，逗号分隔）",
+    "Exclude skins or themes using English keywords, separated by commas"
+  ],
+  [
+    "例如：PROJECT:, Battle Boss",
+    "Example: PROJECT:, Battle Boss"
+  ],
+  [
+    "（候选",
+    "(candidates:"
+  ],
+  [
+    "个）",
+    ")"
+  ],
+  [
+    "跳过：",
+    "Skipped:"
+  ],
+  [
+    "已处理的皮肤与补丁缓存；清理后下次应用需要重新准备",
+    "Prepared skins and patches; clearing requires preparation next time"
+  ],
+  [
+    "打开应用耗时日志",
+    "Open skin application timing log"
+  ],
+  [
+    "正在检查皮肤缓存…",
+    "Checking skin cache…"
+  ],
+  [
+    "复用已准备的皮肤补丁…",
+    "Reusing prepared patches…"
+  ],
+  [
+    "正在构建皮肤补丁…",
+    "Building skin patches…"
+  ],
+  [
+    "皮肤已准备，等待游戏启动…",
+    "Skins ready; waiting for the game…"
+  ],
+  [
+    "战绩查询",
+    "Match History"
+  ],
+  [
+    "没有符合品质和排除规则的已下载皮肤，请下载更多皮肤或调整排除名单。",
+    "No downloaded skins match your quality and exclusion rules. Download more skins or adjust exclusions."
+  ],
+  [
+    "战绩助手",
+    "Match assistant"
+  ],
+  [
+    "选人时自动读取可识别的队友，仅展示接口提供的信息；匿名玩家不会尝试识别。胜率基于已收录的近期有效对局。",
+    "Shows identifiable teammates during champion select using available client data. Anonymous identities are not queried. Win rates use recorded recent matches."
+  ],
+  [
+    "进入选择英雄阶段后，这里会自动展示队友卡片。",
+    "Teammate cards appear automatically during champion select."
+  ],
+  [
+    "尚未选择英雄",
+    "No champion selected"
+  ],
+  [
+    "匿名 / 尚未提供玩家身份",
+    "Anonymous / identity unavailable"
+  ],
+  [
+    "位置待定",
+    "Role unassigned"
+  ],
+  [
+    "段位暂不可用",
+    "Rank unavailable"
+  ],
+  [
+    "暂无可用统计",
+    "No statistics available"
+  ],
+  [
+    "样本",
+    "Sample"
+  ],
+  [
+    "场 ·",
+    "matches ·"
+  ],
+  [
+    "胜",
+    "wins"
+  ],
+  [
+    "负",
+    "losses"
+  ],
+  [
+    "当前英雄",
+    "Current champion"
+  ],
+  [
+    "暂无样本",
+    "No samples"
+  ],
+  [
+    "胜利",
+    "Victory"
+  ],
+  [
+    "失败",
+    "Defeat"
+  ],
+  [
+    "重开",
+    "Remake"
+  ],
+  [
+    "未知",
+    "Unknown"
+  ],
+  [
+    "基于本地已收录的",
+    "Based on"
+  ],
+  [
+    "场有效对局统计；不含重开、人机、训练和自定义，不代表生涯总数据。",
+    "recorded valid matches. Excludes remakes, co-op vs AI, practice and custom games. These are not lifetime totals."
+  ],
+  [
+    "搜索英雄中文名 / 英文名",
+    "Search champion names"
+  ],
+  [
+    "英雄统计排序",
+    "Sort champion statistics"
+  ],
+  [
+    "场次最多",
+    "Most played"
+  ],
+  [
+    "胜率最高",
+    "Highest win rate"
+  ],
+  [
+    "KDA 最高",
+    "Highest KDA"
+  ],
+  [
+    "最近使用",
+    "Recently played"
+  ],
+  [
+    "负 · 胜率",
+    "losses · Win rate"
+  ],
+  [
+    "· 场均伤害",
+    "· Average damage"
+  ],
+  [
+    "· 补刀",
+    "· CS"
+  ],
+  [
+    "/分",
+    "/min"
+  ],
+  [
+    "最近",
+    "Recent"
+  ],
+  [
+    "场",
+    "matches"
+  ],
+  [
+    "实际样本",
+    "Actual samples"
+  ],
+  [
+    "胜率",
+    "Win rate"
+  ],
+  [
+    "平均 KDA",
+    "Average KDA"
+  ],
+  [
+    "当前走势",
+    "Current streak"
+  ],
+  [
+    "每分钟补刀",
+    "CS per minute"
+  ],
+  [
+    "最近对局走势",
+    "Recent match trend"
+  ],
+  [
+    "从左至右由旧到新，每条代表一场，柱高表示 KDA（最高按 10 绘制）",
+    "Oldest to newest, left to right. Each bar is one match; height shows KDA, capped at 10."
+  ],
+  [
+    "绿色：胜利",
+    "Green: victory"
+  ],
+  [
+    "红色：失败",
+    "Red: defeat"
+  ],
+  [
+    "天",
+    "days"
+  ],
+  [
+    "活跃",
+    "Active"
+  ],
+  [
+    "天 · 场均伤害",
+    "days · Average damage"
+  ],
+  [
+    "当前还没有可用于分析的有效对局。",
+    "No valid matches available for analysis yet."
+  ],
+  [
+    "时间未知",
+    "Unknown date"
+  ],
+  [
+    "请在本地匹配结果中选择玩家。",
+    "Select a player from the local results."
+  ],
+  [
+    "本地没有此玩家记录；查询新玩家需要连接对应区服客户端。",
+    "No local record for this player. Connect the matching region's client to search online."
+  ],
+  [
+    "返回上一个玩家",
+    "Back to previous player"
+  ],
+  [
+    "正在后台更新",
+    "Updating in background"
+  ],
+  [
+    "离线 / 查看本地记录",
+    "Offline / local records"
+  ],
+  [
+    "区服待识别",
+    "Region unknown"
+  ],
+  [
+    "云端查询已启用",
+    "Cloud queries enabled"
+  ],
+  [
+    "启用云端查询",
+    "Enable cloud queries"
+  ],
+  [
+    "我的战绩",
+    "My matches"
+  ],
+  [
+    "刷新，只补充新战绩",
+    "Refresh new matches"
+  ],
+  [
+    "查询区服",
+    "Search region"
+  ],
+  [
+    "全部本地区服",
+    "All saved regions"
+  ],
+  [
+    "· 当前连接",
+    "· Connected"
+  ],
+  [
+    "查询玩家",
+    "Search players"
+  ],
+  [
+    "玩家名字#标签 / 本地备注",
+    "Player name#tag / local note"
+  ],
+  [
+    "查询",
+    "Search"
+  ],
+  [
+    "只看收藏",
+    "Favorites only"
+  ],
+  [
+    "我的 ·",
+    "My account ·"
+  ],
+  [
+    "暂无收藏玩家",
+    "No favorite players"
+  ],
+  [
+    "查询过的玩家会保存在这里，可离线查看",
+    "Queried players are saved here for offline viewing"
+  ],
+  [
+    "历史战绩",
+    "Match history"
+  ],
+  [
+    "我的英雄",
+    "My champions"
+  ],
+  [
+    "近期趋势",
+    "Recent trends"
+  ],
+  [
+    "选人助手",
+    "Champion select"
+  ],
+  [
+    "召唤师头像",
+    "Profile icon"
+  ],
+  [
+    "本地已收录",
+    "Recorded"
+  ],
+  [
+    "场 · 筛选",
+    "matches · Filtered"
+  ],
+  [
+    "场 · 有效样本",
+    "matches · Valid samples"
+  ],
+  [
+    "取消收藏",
+    "Remove favorite"
+  ],
+  [
+    "收藏玩家",
+    "Favorite player"
+  ],
+  [
+    "单双排",
+    "Ranked solo/duo"
+  ],
+  [
+    "灵活排位",
+    "Ranked flex"
+  ],
+  [
+    "竞技场",
+    "Arena"
+  ],
+  [
+    "胜 /",
+    "wins /"
+  ],
+  [
+    "玩家备注",
+    "Player note"
+  ],
+  [
+    "添加玩家备注",
+    "Add a player note"
+  ],
+  [
+    "尚未同步",
+    "Not synced yet"
+  ],
+  [
+    "缓存信息",
+    "Cache information"
+  ],
+  [
+    "再次点击清除此玩家列表和资料",
+    "Click again to clear this player's matches and profile"
+  ],
+  [
+    "清除此玩家缓存",
+    "Clear this player's cache"
+  ],
+  [
+    "本地缓存",
+    "Local cache"
+  ],
+  [
+    "玩家战绩",
+    "Player histories"
+  ],
+  [
+    "玩家资料",
+    "Player profiles"
+  ],
+  [
+    "对局详情",
+    "Match details"
+  ],
+  [
+    "图片",
+    "Images"
+  ],
+  [
+    "（详情和图片为共享缓存）",
+    "(details and images are shared)"
+  ],
+  [
+    "打开缓存与诊断日志目录",
+    "Open cache and diagnostic logs"
+  ],
+  [
+    "正在更新账号资料和段位…",
+    "Updating profile and rank…"
+  ],
+  [
+    "段位更新未完成：",
+    "Rank update incomplete:"
+  ],
+  [
+    "正在查看本地缓存，翻页和已缓存详情可离线使用。更新需连接对应区服客户端。",
+    "Viewing local records. Pages and saved details work offline. Connect the matching region's client to update."
+  ],
+  [
+    "连接并登录客户端后可获取战绩；已查询的记录会自动保存在本地。",
+    "Sign in to the client to fetch matches. Queried records are saved locally."
+  ],
+  [
+    "正在同步，已保留",
+    "Syncing; saved"
+  ],
+  [
+    "场 · 本次最多查询",
+    "matches · This sync requests up to"
+  ],
+  [
+    "停止同步",
+    "Stop sync"
+  ],
+  [
+    "对局模式筛选",
+    "Filter by mode"
+  ],
+  [
+    "胜负筛选",
+    "Filter by result"
+  ],
+  [
+    "全部胜负",
+    "All results"
+  ],
+  [
+    "全部位置",
+    "All roles"
+  ],
+  [
+    "英雄筛选",
+    "Filter by champion"
+  ],
+  [
+    "英雄中文名 / 英文名",
+    "Champion name"
+  ],
+  [
+    "开始日期",
+    "Start date"
+  ],
+  [
+    "至",
+    "to"
+  ],
+  [
+    "结束日期",
+    "End date"
+  ],
+  [
+    "重置",
+    "Reset"
+  ],
+  [
+    "筛选和统计基于已收录记录；有效样本排除人机、训练、自定义和重开。位置缺失的对局显示“未知”。",
+    "Filters and statistics use recorded matches. Valid samples exclude co-op vs AI, practice, custom games and remakes. Missing roles are shown as Unknown."
+  ],
+  [
+    "未知英雄",
+    "Unknown champion"
+  ],
+  [
+    "补刀",
+    "CS"
+  ],
+  [
+    "· 伤害",
+    "· Damage"
+  ],
+  [
+    "· 查看详情",
+    "· Details"
+  ],
+  [
+    "正在读取本地记录…",
+    "Reading local records…"
+  ],
+  [
+    "没有符合条件的对局，请重置筛选或继续加载。",
+    "No matches fit these filters. Reset filters or load more."
+  ],
+  [
+    "还没有已收录战绩，可登录客户端后同步。",
+    "No recorded matches yet. Sign in to the client to sync."
+  ],
+  [
+    "请登录客户端识别账号，或选择本地保存的玩家。",
+    "Sign in to detect your account, or select a saved player."
+  ],
+  [
+    "当前数据源已返回全部可读取记录；本地旧记录会继续保留。",
+    "All available matches have been returned by this source. Older local records are retained."
+  ],
+  [
+    "上一页",
+    "Previous page"
+  ],
+  [
+    "页 · 每页 10 场",
+    "pages · 10 matches per page"
+  ],
+  [
+    "下一页",
+    "Next page"
+  ],
+  [
+    "跳转战绩页",
+    "Go to page"
+  ],
+  [
+    "第",
+    "Page"
+  ],
+  [
+    "页",
+    " "
+  ],
+  [
+    "再加载 100 场",
+    "Load 100 more"
+  ],
+  [
+    "获取最多 500 场",
+    "Fetch up to 500"
+  ],
+  [
+    "云端战绩授权",
+    "Cloud match access"
+  ],
+  [
+    "启用云端战绩",
+    "Enable cloud matches"
+  ],
+  [
+    "读取客户端的登录授权，仅向当前区服的 Riot 战绩服务器查询。令牌不会写入磁盘、传给页面或发送到第三方。战绩缓存不包含登录凭据。",
+    "Uses the client's authorization only with the current region's Riot match server. Tokens are not saved, exposed to the page or sent to third parties. Match caches contain no login credentials."
+  ],
+  [
+    "正在识别区服…",
+    "Detecting region…"
+  ],
+  [
+    "取消",
+    "Cancel"
+  ],
+  [
+    "同意并启用",
+    "Agree and enable"
+  ],
+  [
+    "返回战绩列表",
+    "Back to matches"
+  ],
+  [
+    "关闭详情",
+    "Close details"
+  ],
+  [
+    "正在读取对局详情，优先使用本地缓存…",
+    "Reading match details, using local cache first…"
+  ],
+  [
+    "伤害",
+    "Damage"
+  ],
+  [
+    "承伤",
+    "Damage taken"
+  ],
+  [
+    "经济",
+    "Gold"
+  ],
+  [
+    "视野",
+    "Vision"
+  ],
+  [
+    "击杀",
+    "Kills"
+  ],
+  [
+    "参团率",
+    "Kill participation"
+  ],
+  [
+    "未知玩家",
+    "Unknown player"
+  ],
+  [
+    "点击玩家名字查看主页；段位为最近查询值，并非对局时段位。表现标签在本场同队成员中比较。",
+    "Click a player to view their profile. Ranks are recently queried values, not historical ranks. Performance labels compare teammates in this match."
+  ],
+  [
+    "排序 / 对比",
+    "Sort / compare"
+  ],
+  [
+    "结果未知",
+    "Unknown result"
+  ],
+  [
+    "蓝色方",
+    "Blue team"
+  ],
+  [
+    "红色方",
+    "Red team"
+  ],
+  [
+    "击杀 · 经济",
+    "kills · Gold"
+  ],
+  [
+    "推塔",
+    "Turrets"
+  ],
+  [
+    "小龙",
+    "Dragons"
+  ],
+  [
+    "大龙",
+    "Barons"
+  ],
+  [
+    "· 插眼",
+    "· Wards"
+  ],
+  [
+    "符文",
+    "Runes"
+  ],
+  [
+    "此对局未提供完整符文数据。",
+    "Full rune data is unavailable for this match."
+  ],
+  [
+    "未定级",
+    "Unranked"
+  ],
+  [
+    "黑铁",
+    "Iron"
+  ],
+  [
+    "青铜",
+    "Bronze"
+  ],
+  [
+    "白银",
+    "Silver"
+  ],
+  [
+    "黄金",
+    "Gold"
+  ],
+  [
+    "铂金",
+    "Platinum"
+  ],
+  [
+    "翡翠",
+    "Emerald"
+  ],
+  [
+    "钻石",
+    "Diamond"
+  ],
+  [
+    "大师",
+    "Master"
+  ],
+  [
+    "宗师",
+    "Grandmaster"
+  ],
+  [
+    "王者",
+    "Challenger"
+  ],
+  [
+    "匹配 / 快速",
+    "Normal / quickplay"
+  ],
+  [
+    "极地大乱斗",
+    "ARAM"
+  ],
+  [
+    "斗魂竞技场",
+    "Arena"
+  ],
+  [
+    "人机",
+    "Co-op vs AI"
+  ],
+  [
+    "训练 / 自定义",
+    "Practice / custom"
+  ],
+  [
+    "全部模式",
+    "All modes"
+  ],
+  [
+    "征召匹配",
+    "Normal draft"
+  ],
+  [
+    "匹配",
+    "Normal blind"
+  ],
+  [
+    "快速模式",
+    "Quickplay"
+  ],
+  [
+    "训练模式",
+    "Practice"
+  ],
+  [
+    "海克斯大乱斗",
+    "Hextech ARAM"
+  ],
+  [
+    "人机入门",
+    "Intro bots"
+  ],
+  [
+    "人机新手",
+    "Beginner bots"
+  ],
+  [
+    "人机一般",
+    "Intermediate bots"
+  ],
+  [
+    "自定义",
+    "Custom"
+  ],
+  [
+    "输出最高",
+    "Highest damage"
+  ],
+  [
+    "承伤最高",
+    "Most damage taken"
+  ],
+  [
+    "经济最高",
+    "Most gold"
+  ],
+  [
+    "视野最高",
+    "Highest vision"
+  ],
+  [
+    "暂无记录",
+    "No records"
+  ],
+  [
+    "更改",
+    "Change"
+  ],
+  [
+    "确认",
+    "Confirm"
+  ],
+  [
+    "浏览",
+    "Browse"
+  ],
+  [
+    "关闭",
+    "Close"
+  ],
+  [
+    "下载",
+    "Download"
+  ],
+  [
+    "返回",
+    "Back"
+  ],
+  [
+    "皮肤预览图片缓存",
+    "Skin artwork cache"
+  ],
+  [
+    "已查看的原画保存在本地，切换页面和重启后优先复用；清理不影响已下载皮肤",
+    "Viewed artwork is saved locally and reused across pages and restarts. Clearing it does not remove skins."
+  ],
+  [
+    "正在清理…",
+    "Clearing…"
+  ],
+  [
+    "继续",
+    "Continue"
+  ],
+  [
+    "浏览…",
+    "Browse..."
+  ],
+  [
+    "路径不对？更改路径",
+    "Wrong path? Change it"
+  ],
+  [
+    "移除",
+    "Remove"
+  ],
+  [
+    "模组",
+    "Mod"
+  ]
+]
